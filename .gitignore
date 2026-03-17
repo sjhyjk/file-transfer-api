@@ -1,0 +1,20 @@
+# --- セキュリティ (絶対に必要) ---
+# 認証キー
+gcp-key.json
+
+# --- Go 関連 ---
+# ビルドで生成される実行ファイル
+app
+main
+*.exe
+*.test
+
+# 依存関係（通常は go.mod/sum があれば不要）
+# Goのツール
+vendor/
+
+# --- システム/エディタ (環境を汚さない) ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
