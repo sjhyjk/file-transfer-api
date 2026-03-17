@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"file-transfer-api/internal/domain"
@@ -15,9 +16,17 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// 1. 設定値（本来は環境変数などから取ります）
-	bucketName := "file-transfer-bucket-syou-20240121"
-	keyFile := "gcp-key.json"
+	// 1. 環境変数から取得（設定されていなければデフォルト値を使用）
+	bucketName := os.Getenv("BUCKET_NAME")
+	if bucketName == "" {
+		// 開発中の利便性のために、今のバケット名をデフォルトに設定
+		bucketName = "file-transfer-bucket-syou-20240121"
+	}
+
+	keyFile := os.Getenv("GCP_KEY_FILE")
+	if keyFile == "" {
+		keyFile = "gcp-key.json"
+	}
 
 	// 2. Infrastructureの初期化
 	repo, err := infra.NewGCSRepository(ctx, bucketName, keyFile)

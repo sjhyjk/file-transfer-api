@@ -8,6 +8,7 @@ app
 main
 *.exe
 *.test
+.env
 
 # 依存関係（通常は go.mod/sum があれば不要）
 # Goのツール
