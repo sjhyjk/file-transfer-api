@@ -1,27 +1,34 @@
-# Go Parallel File Transfer API (Clean Architecture)
+# Go Parallel File Transfer API (Architecture Study)
 
-数学的思考に基づき、保守性とスケーラビリティを追求したファイル転送基盤です。
-単なる実装に留まらず、設計の抽象化と並行処理の最適化を行っています。
+本プロジェクトは、**Goの並行処理モデル（Concurrency）**と**クリーンアーキテクチャ（Clean Architecture）**の設計思想の習得を目的とした、クラウドストレージ転送基盤の技術検証リポジトリです。
 
-## 🛠 進化のプロセス
-本リポジトリには、開発の過程をあえて残しています。
-- `archives/main_botu.go`: 初期実装（1枚岩のメインファイル）
-- `cmd/api/main.go`: 現在の実装（クリーンアーキテクチャ採用、並行処理最適化済み）
+## 🚀 実装の柱
 
-## 🚀 特徴
-- **クリーンアーキテクチャ**: 依存性の逆転（DIP）により、インフラ（GCS）とビジネスロジックを分離。
-- **並行処理 (Goroutine)**: 3ファイルの同時アップロードにより、処理時間を約2.1s → 0.9sへ短縮（約50%改善）。
-- **Docker/Distroless**: セキュリティと軽量化を両立したマルチステージビルド。
-- **環境変数の外部化**: `.env` による設定管理で、セキュリティと可搬性を確保。
+### 1. クリーンアーキテクチャによる疎結合設計
+依存性の逆転（DIP）を徹底し、ビジネスロジックを特定の実行環境やインフラから分離しています。
 
-## 🏗 アーキテクチャ構成
+- **Domain**: 数学的な「定義の抽象化」を意識し、ファイルエンティティとリポジトリのインターフェースを定義。
+- **Usecase**: 並行アップロードの制御ロジックをカプセル化。
+- **Infrastructure**: GCS SDKを用いた具体的な具象実装を担当。
+- **cmd**: アプリケーションの起動（Dependency Injection）を担当するエントリポイント。レイヤー構造の外側に配置することで、実行環境（CLI/API等）の交換可能性を確保。
 
+### 2. Goの並行処理モデル
+GoroutineとChannelを活用し、ネットワークI/Oの待機時間を最適化。3ファイル同時アップロードにおいて **2.1s → 0.9s** への高速化（約53%改善）を実証済みです。
 
-- **Domain**: エンティティとリポジトリのIF定義
-- **Usecase**: 並行アップロードの制御
-- **Infrastructure**: GCS SDKを用いた具象実装
+### 3. コンテナ戦略とセキュリティ
+- **Multi-stage Build & Distroless**: 実行バイナリのみを抽出した軽量イメージ（Distroless）により、攻撃面を最小化。
+- **Environment Variables**: `.env` による設定の外部注入により、機密情報のハードコードを排除し、商用グレードのリンター警告（`SecretsUsedInArgOrEnv`）をクリア。
 
-## 🏃 実行方法
-1. `.env` を作成し、`BUCKET_NAME` 等を設定。
-2. `docker build -t file-api .`
-3. `docker run --rm --env-file .env file-api`
+## 📁 プロジェクト構造
+```text
+.
+├── cmd/                # Entry Point (実行環境の決定・外部との接点)
+│   └── api/
+│       └── main.go     # DIを行い、Usecaseを起動
+├── internal/           # Business Logic (クリーンアーキ本体)
+│   ├── domain/         # Interface / Entity
+│   ├── usecase/        # Application Logic
+│   └── infra/          # Adapter (GCS等)
+├── archives/           # 試行錯誤の軌跡（初期の直列・Monolith実装を保存）
+├── Dockerfile          # マルチステージビルド定義
+└── .env                # 環境設定（Git管理対象外）
