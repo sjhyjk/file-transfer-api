@@ -1,9 +1,14 @@
+// [Benchmark Baseline]
+// クリーンアーキテクチャ採用前のモノリスな初期実装。
+// 依存関係が密結合であり、並行処理への拡張性が低い状態を検証するために保存。
+
 package main
 
 import (
 	"context"
 	"fmt"
 	"log"
+
 	//"time"
 
 	"cloud.google.com/go/storage"
@@ -26,7 +31,7 @@ func main() {
 
 	// バケットに対して書き込みを開始する
 	wc := client.Bucket(bucketName).Object(objectName).NewWriter(ctx)
-	
+
 	// 書き込む内容
 	if _, err := wc.Write([]byte("Hello from WSL2 via Go!")); err != nil {
 		log.Fatalf("ファイルの書き込みに失敗しました: %v", err)

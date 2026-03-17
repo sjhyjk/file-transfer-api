@@ -46,13 +46,42 @@ func main() {
 	}
 
 	// 5. 並行アップロードの実行と計測
-	start := time.Now()
-	fmt.Println("🚀 並行アップロードを開始します...")
+	// ---------------------------------------------------------
+	// 検証1: シリアル（逐次）アップロードの実行と計測
+	// ---------------------------------------------------------
+	fmt.Println("\n--- [Phase 1] Serial Upload Start ---")
+	startSerial := time.Now()
 
-	if err := interactor.UploadMultiple(ctx, testFiles); err != nil {
-		log.Fatalf("アップロード中にエラーが発生: %v", err)
+	// 新しく追加する Serial 用メソッドを呼び出す
+	if err := interactor.UploadMultipleSerial(ctx, testFiles); err != nil {
+		log.Fatalf("シリアルアップロード中にエラーが発生: %v", err)
 	}
 
-	duration := time.Since(start)
-	fmt.Printf("✅ すべてのアップロードが完了しました！ (計測時間: %v)\n", duration)
+	durationSerial := time.Since(startSerial)
+	fmt.Printf("✅ シリアル完了 (計測時間: %v)\n", durationSerial)
+
+	// ---------------------------------------------------------
+	// 検証2: 並行（Goroutine）アップロードの実行と計測
+	// ---------------------------------------------------------
+	fmt.Println("\n--- [Phase 2] Parallel Upload Start ---")
+	startParallel := time.Now()
+
+	// Parallel 用にリネームしたメソッドを呼び出す
+	if err := interactor.UploadMultipleParallel(ctx, testFiles); err != nil {
+		log.Fatalf("並行アップロード中にエラーが発生: %v", err)
+	}
+
+	durationParallel := time.Since(startParallel)
+	fmt.Printf("✅ 並行完了 (計測時間: %v)\n", durationParallel)
+
+	// ---------------------------------------------------------
+	// 6. 検証結果の比較（設計上の判断材料として出力）
+	// ---------------------------------------------------------
+	fmt.Printf("\n📈 Performance Benchmark Results:\n")
+	fmt.Printf("  Method A (Serial):   %v\n", durationSerial)
+	fmt.Printf("  Method B (Parallel): %v\n", durationParallel)
+
+	// パフォーマンス改善率の計算
+	improvement := float64(durationSerial-durationParallel) / float64(durationSerial) * 100
+	fmt.Printf("  Performance Gain:    %.2f%%\n", improvement)
 }
