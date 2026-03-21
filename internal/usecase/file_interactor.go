@@ -8,17 +8,12 @@ import (
 	"sync" // 並行処理の同期に必要
 )
 
-// FileRepository は、保存先の具体的な実装を抽象化したインターフェースです
-type FileRepository interface {
-	Save(ctx context.Context, name string, data io.Reader) error
-}
-
 // FileInteractor は、ファイル操作のビジネスロジックを管理します
 type FileInteractor struct {
-	repo FileRepository
+	repo domain.FileRepository
 }
 
-func NewFileInteractor(repo FileRepository) *FileInteractor {
+func NewFileInteractor(repo domain.FileRepository) *FileInteractor {
 	return &FileInteractor{repo: repo}
 }
 

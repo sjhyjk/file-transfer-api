@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"file-transfer-api/internal/domain"
@@ -16,27 +15,16 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// 1. 環境変数から取得（設定されていなければデフォルト値を使用）
-	bucketName := os.Getenv("BUCKET_NAME")
-	if bucketName == "" {
-		// 開発中の利便性のために、今のバケット名をデフォルトに設定
-		bucketName = "file-transfer-bucket-syou-20240121"
-	}
-
-	keyFile := os.Getenv("GCP_KEY_FILE")
-	if keyFile == "" {
-		keyFile = "gcp-key.json"
-	}
-
-	// 2. Infrastructureの初期化
-	repo, err := infra.NewGCSRepository(ctx, bucketName, keyFile)
+	// 1. Factory を使ってリポジトリを生成（具象クラスを隠蔽）
+	repo, err := infra.NewStorageRepository(ctx)
 	if err != nil {
 		log.Fatalf("リポジトリの初期化に失敗: %v", err)
 	}
-	defer repo.Close()
+
+	// defer repo.Close() // 必要に応じてRepositoryインターフェースにCloseを定義
 
 	// 3. Usecaseの初期化（ここでInfraを注入する）
-	interactor := usecase.NewFileInteractor(repo)
+	interactor := usecase.NewFileInteractor(repo) // repo が domain.FileRepository 型ならOK
 
 	// 4. テストデータの準備（3つのファイルを並行で送る準備）
 	testFiles := []*domain.File{
