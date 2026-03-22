@@ -19,3 +19,15 @@ vendor/
 .idea/
 .DS_Store
 Thumbs.db
+
+# --- Terraform 関連 (機密情報とバイナリ) ---
+# プラグインなどの実行バイナリ
+.terraform/
+
+# インフラの現在の状態（State）
+# これを上げると他の人が実行した時に競合したり、機密が漏れたりします
+*.tfstate
+*.tfstate.*
+
+# 依存関係のロックファイル（チーム開発でなければ無視してOK）
+.terraform.lock.hcl
