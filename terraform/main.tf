@@ -23,4 +23,25 @@ resource "google_storage_bucket" "file_transfer_bucket" {
   force_destroy = true # 削除時に中身があっても消せる設定（検証用）
 
   uniform_bucket_level_access = true # セキュリティのベストプラクティス
+  
+  # 誤って公開されないための設定
+  public_access_prevention = "enforced"
+}
+
+# Python 比較検証用のバケット
+resource "google_storage_bucket" "python_test_bucket" {
+  name          = "python-bench-bucket-${var.project_id}"
+  location      = "US-WEST1"
+  force_destroy = true
+  public_access_prevention = "enforced"
+}
+
+# RAG 用のデータソースバケット
+resource "google_storage_bucket" "rag_source_bucket" {
+  name          = "rag-source-${var.project_id}"
+  location      = "US-WEST1"
+  force_destroy = true
+
+  # RAGの機密データを守るための必須設定
+  public_access_prevention = "enforced"
 }
