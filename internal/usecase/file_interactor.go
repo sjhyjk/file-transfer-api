@@ -10,17 +10,29 @@ import (
 
 // FileInteractor は、ファイル操作のビジネスロジックを管理します
 type FileInteractor struct {
-	repo domain.FileRepository
+	repo     domain.FileRepository
+	pipeline domain.DataPipeline // ★ 追加：RAGなど後続処理への通知用
 }
 
-func NewFileInteractor(repo domain.FileRepository) *FileInteractor {
-	return &FileInteractor{repo: repo}
+func NewFileInteractor(repo domain.FileRepository, pipeline domain.DataPipeline) *FileInteractor {
+	return &FileInteractor{
+		repo:     repo,
+		pipeline: pipeline, // ★ 注入（Dependency Injection）
+	}
 }
 
 // UploadSingle は、単一のファイルをアップロードする手順を定義します
 func (i *FileInteractor) UploadSingle(ctx context.Context, name string, size int64, content io.Reader) error {
 	file := domain.NewFile(name, size, content)
-	return i.repo.Save(ctx, file.Name, file.Content)
+	if err := i.repo.Save(ctx, file.Name, file.Content); err != nil {
+		return err
+	}
+
+	// ★ 保存成功後、パイプラインに通知
+	if i.pipeline != nil {
+		return i.pipeline.NotifyNewFile(ctx, file.Name)
+	}
+	return nil
 }
 
 // UploadMultipleParallel は、Goroutine を用いて複数のファイルを並行してアップロードします。
@@ -42,7 +54,16 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 				errChan <- fmt.Errorf("%s のアップロード失敗: %w", file.Name, err)
 				return
 			}
-			fmt.Printf("✅ [Parallel] アップロード完了: %s\n", file.Name)
+
+			// ★ 保存に成功したら、即座にパイプラインへ通知を開始する
+			if i.pipeline != nil {
+				if err := i.pipeline.NotifyNewFile(ctx, file.Name); err != nil {
+					errChan <- fmt.Errorf("%s の通知失敗: %w", file.Name, err)
+					return
+				}
+			}
+
+			fmt.Printf("✅ [Parallel] アップロード完了 & 通知済: %s\n", file.Name)
 		}(f)
 	}
 

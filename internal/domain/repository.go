@@ -12,3 +12,9 @@ type FileRepository interface {
 	Save(ctx context.Context, name string, data io.Reader) error
 	Close() error // これで main.go の defer が動くようになる
 }
+
+// DataPipeline は、保存されたデータを後続の処理（RAGのインジェストなど）へ
+// 渡すための抽象的な「出口」を定義します。
+type DataPipeline interface {
+	NotifyNewFile(ctx context.Context, fileName string) error
+}

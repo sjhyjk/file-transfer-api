@@ -1,0 +1,23 @@
+name: Docker Build Check
+
+on:
+  push:
+    branches: [ main ] # mainブランチにpushされたら実行
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # GitHub側のマシンで実行されるので、自分のPCは重くならない
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Build Docker image
+      run: |
+        # ここでビルド。実際のエンプラ環境ではこの後 Artifact Registry 等へ push します
+        docker build -t file-transfer-api:${{ github.sha }} .

@@ -24,7 +24,8 @@ func main() {
 	// defer repo.Close() // 必要に応じてRepositoryインターフェースにCloseを定義
 
 	// 3. Usecaseの初期化（ここでInfraを注入する）
-	interactor := usecase.NewFileInteractor(repo) // repo が domain.FileRepository 型ならOK
+	// 第2引数に nil を渡すことで、「今は通知先がない」状態を明示します
+	interactor := usecase.NewFileInteractor(repo, nil) // repo が domain.FileRepository 型ならOK
 
 	// 4. テストデータの準備（3つのファイルを並行で送る準備）
 	testFiles := []*domain.File{
