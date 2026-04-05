@@ -17,7 +17,12 @@ jobs:
       with:
         go-version: '1.24'
 
+# ✅ ステップ1: テストの実行
+    # これが失敗すると、下のビルドやデプロイは実行されません（安全！）
+    - name: Run Tests
+      run: go test -v ./...
+
+    # ✅ ステップ2: Dockerビルド
     - name: Build Docker image
-      run: |
-        # ここでビルド。実際のエンプラ環境ではこの後 Artifact Registry 等へ push します
-        docker build -t file-transfer-api:${{ github.sha }} .
+      run: docker build -t us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }} .
+        # ここでビルド。実際のエンプラ環境ではこの後 Artifact Registry 等へ push します    
