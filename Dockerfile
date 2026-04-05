@@ -19,9 +19,8 @@ FROM gcr.io/distroless/static-debian12
 
 WORKDIR /
 
-# ビルドしたバイナリと認証ファイルをコピー
+# ビルドしたバイナリをコピー
 COPY --from=builder /app/main .
-COPY --from=builder /app/gcp-key.json .
 
 # 実行
 CMD ["./main"]
