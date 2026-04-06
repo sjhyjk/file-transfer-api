@@ -17,7 +17,16 @@ type GCSRepository struct {
 
 // NewGCSRepository は初期化関数です（main.goなどで呼び出します）
 func NewGCSRepository(ctx context.Context, bucketName, keyFile string) (*GCSRepository, error) {
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(keyFile))
+	var opts []option.ClientOption
+
+	// keyFile が指定されている（ローカル環境など）場合のみファイルを使う
+	if keyFile != "" {
+		opts = append(opts, option.WithCredentialsFile(keyFile))
+	}
+	// keyFile が空の場合、storage.NewClient は自動的に環境（Cloud Runなど）の認証情報を使います
+
+	// 2. opts... （三点リーダー）を使ってスライスを展開して渡す
+	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("GCSクライアントの作成に失敗: %w", err)
 	}

@@ -25,10 +25,11 @@ func NewStorageRepository(ctx context.Context) (domain.FileRepository, error) {
 		if bucketName == "" {
 			bucketName = "file-transfer-bucket-syou-20240121"
 		}
+
 		keyFile := os.Getenv("GCP_KEY_FILE")
-		if keyFile == "" {
-			keyFile = "gcp-key.json"
-		}
+		// ローカル環境（ファイルがある場合）のみ keyFile を設定し、
+		// なければ空のまま NewGCSRepository に渡すようにします。
+		// ※以前のステップで修正した「空でも動くNewGCSRepository」と組み合わせます。
 
 		return gcs.NewGCSRepository(ctx, bucketName, keyFile)
 	}

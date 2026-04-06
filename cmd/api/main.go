@@ -19,8 +19,10 @@ func main() {
 
 	// 1. Factory を使ってリポジトリを生成（具象クラスを隠蔽）
 	repo, err := infra.NewStorageRepository(ctx)
+	var initError error
 	if err != nil {
-		log.Fatalf("リポジトリの初期化に失敗: %v", err)
+		log.Printf("⚠️ リポジトリの初期化に失敗（後でブラウザに表示します）: %v", err)
+		initError = err // エラーを保持しておく
 	}
 
 	// defer repo.Close() // 必要に応じてRepositoryインターフェースにCloseを定義
@@ -88,7 +90,13 @@ func main() {
 
 	// ヘルスチェック用のエンドポイント（Cloud Run の起動確認に必要）
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "File Transfer API is running. Gain: %.2f%%", improvement)
+		if initError != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "❌ Initialization Error: %v\n", initError)
+			fmt.Fprintf(w, "Check Cloud Run Env Vars (STORAGE_TYPE etc.)")
+			return
+		}
+		fmt.Fprintf(w, "✅ Running! Gain: %.2f%%", improvement)
 	})
 
 	// アップロード用のエンドポイント（将来的にここへ POST する）

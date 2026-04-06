@@ -53,3 +53,8 @@ jobs:
         region: 'us-west1'
         # 初回デプロイ時は、認証なしアクセスを許可（APIとして公開する場合）
         flags: '--allow-unauthenticated'
+        # ★ ここを追加！
+        env_vars: |
+          STORAGE_TYPE=gcs
+          GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+          BUCKET_NAME=my-new-production-bucket # ここで上書き可能！
