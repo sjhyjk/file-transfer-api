@@ -57,4 +57,5 @@ jobs:
         env_vars: |
           STORAGE_TYPE=gcs
           GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-          BUCKET_NAME=my-new-production-bucket # ここで上書き可能！
+          BUCKET_NAME=file-transfer-bucket-syou-20240121
+  
