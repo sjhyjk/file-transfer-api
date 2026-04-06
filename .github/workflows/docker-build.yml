@@ -17,12 +17,39 @@ jobs:
       with:
         go-version: '1.24'
 
-# ✅ ステップ1: テストの実行
+    # ✅ ステップ1: テストの実行
     # これが失敗すると、下のビルドやデプロイは実行されません（安全！）
     - name: Run Tests
       run: go test -v ./...
 
-    # ✅ ステップ2: Dockerビルド
-    - name: Build Docker image
-      run: docker build -t us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }} .
-        # ここでビルド。実際のエンプラ環境ではこの後 Artifact Registry 等へ push します    
+    # ✅ ステップ2: Google Cloud 認証
+    # Workload Identity 等の設定が済むまでは、サービスアカウントキー（JSON）を
+    # GitHub Secrets (GCP_SA_KEY) に登録して使う方式が一般的です。
+    - name: Google Auth
+      uses: 'google-github-actions/auth@v2'
+      with:
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+    - name: 'Set up Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v2'
+
+    - name: 'Docker Auth'
+      run: |-
+        gcloud auth configure-docker us-west1-docker.pkg.dev
+
+    # ✅ ステップ3: Dockerビルド & プッシュ
+    # イメージタグに github.sha を使うことで、どのコードがデプロイされたか特定可能にします。
+    - name: Build and Push Docker image
+      run: |
+        docker build -t us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }} .
+        docker push us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}
+
+    # ✅ ステップ4: Cloud Run へのデプロイ
+    - name: Deploy to Cloud Run
+      uses: 'google-github-actions/deploy-cloudrun@v2'
+      with:
+        service: 'file-transfer-api'
+        image: 'us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}'
+        region: 'us-west1'
+        # 初回デプロイ時は、認証なしアクセスを許可（APIとして公開する場合）
+        flags: '--allow-unauthenticated'

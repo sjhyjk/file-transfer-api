@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
 	"time"
 
 	"file-transfer-api/internal/domain"
@@ -73,4 +75,32 @@ func main() {
 	// パフォーマンス改善率の計算
 	improvement := float64(durationSerial-durationParallel) / float64(durationSerial) * 100
 	fmt.Printf("  Performance Gain:    %.2f%%\n", improvement)
+
+	// =========================================================
+	// 🚀 [New] Cloud Run / API サーバー用設定
+	// =========================================================
+
+	// Cloud Run は環境変数 "PORT" を指定してくるため、それを取得
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // ローカル実行時のデフォルト
+	}
+
+	// ヘルスチェック用のエンドポイント（Cloud Run の起動確認に必要）
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "File Transfer API is running. Gain: %.2f%%", improvement)
+	})
+
+	// アップロード用のエンドポイント（将来的にここへ POST する）
+	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
+		// ここに interactor.UploadMultipleParallel を呼ぶロジックを移譲予定
+		fmt.Fprintln(w, "Upload endpoint reached")
+	})
+
+	fmt.Printf("\n📡 Starting server on port %s...\n", port)
+
+	// サーバーを起動（ここでプログラムが終了せずに待機状態になります）
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		log.Fatalf("サーバー起動失敗: %v", err)
+	}
 }
