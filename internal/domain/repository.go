@@ -11,6 +11,9 @@ import (
 type FileRepository interface {
 	Save(ctx context.Context, name string, data io.Reader) error
 	Close() error // これで main.go の defer が動くようになる
+
+	// 今後の深化：ビジネスルールに基づくバッチ処理やリトライの抽象化
+	// FindAllByStatus(ctx context.Context, status TransferStatus) ([]*File, error)
 }
 
 // DataPipeline は、保存されたデータを後続の処理（RAGのインジェストなど）へ
