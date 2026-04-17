@@ -60,4 +60,4 @@ jobs:
           STORAGE_TYPE=gcs
           GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
           BUCKET_NAME=file-transfer-bucket-syou-20240121
-          DATABASE_URL=user=app_user password=${{ secrets.DB_PASSWORD }} database=transfer_metadata host=/cloudsql/${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-api-project:us-west1:file-transfer-db
+          DATABASE_URL=user=app_user password=${{ secrets.DB_PASSWORD }} database=transfer_metadata host=/cloudsql/${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
