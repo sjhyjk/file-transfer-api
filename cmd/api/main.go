@@ -46,10 +46,19 @@ func main() {
 
 	// defer repo.Close() // 必要に応じてRepositoryインターフェースにCloseを定義
 
-	// 3. Usecaseの初期化（ここでInfraを注入する）
-	// 第2引数に nil を渡すことで、「今は通知先がない」状態を明示します
-	// ※現時点では sqlRepo はまだ Interactor に注入していませんが、接続確認はこれで可能です。
-	interactor := usecase.NewFileInteractor(repo, sqlRepo, nil) // repo が domain.FileRepository 型ならOK
+	// 1. 具体的な実装を受け取る変数を、domain層のインターフェース型として定義し直します
+	var (
+		fileRepo     domain.FileRepository
+		metadataRepo domain.MetadataRepository
+	)
+
+	// 2. 作成したインスタンスをインターフェース型に代入（これで抽象化される）
+	fileRepo = repo
+	metadataRepo = sqlRepo
+
+	// 3. Usecaseの初期化時には、インターフェース型の変数として渡す
+	// これにより、usecase側には「実体(infra)が何か」を隠したまま「機能(interface)」だけを渡せます
+	interactor := usecase.NewFileInteractor(fileRepo, metadataRepo, nil)
 
 	// 4. テストデータの準備（3つのファイルを並行で送る準備）
 	testFiles := []*domain.File{

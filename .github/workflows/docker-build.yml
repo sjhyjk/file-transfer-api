@@ -22,6 +22,12 @@ jobs:
     - name: Run Tests
       run: go test -v ./...
 
+    # ✅ ステップ1.5: アーキテクチャの静的解析（追加箇所）
+    - name: Architecture Check
+      run: |
+        go install github.com/fe3dback/go-arch-lint@latest
+        go-arch-lint check
+
     # ✅ ステップ2: Google Cloud 認証
     # Workload Identity 等の設定が済むまでは、サービスアカウントキー（JSON）を
     # GitHub Secrets (GCP_SA_KEY) に登録して使う方式が一般的です。

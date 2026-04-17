@@ -1,0 +1,44 @@
+version: 3
+# プロジェクトのモジュール名（go.modに合わせる）
+allow:
+  depOnAnyVendor: true
+
+# 1. 構成要素の定義
+components:
+  domain:
+    in: internal/domain
+  usecase:
+    in: internal/usecase
+  infra:
+    # internal/infra 直下だけでなく、サブディレクトリも含める
+    in: internal/infra/** 
+  app:
+    # cmd/api/main.go などを「実行プログラム」として定義
+    in: cmd/**
+
+# 2. 依存関係のルール（理論）
+deps:
+  domain:
+    # 内部のどのコンポーネントにも依存しないことを明示
+    anyProjectDeps: false
+    # リストが空であることを許容させるための記述
+    mayDependOn:  # domainは数学的に純粋。他への依存を一切許さない。
+      - domain # 自分自身への依存のみ許可することで、他層への依存を物理的に遮断
+  usecase:
+    mayDependOn:
+      - domain     # usecaseはdomainのみに依存
+  infra:
+    mayDependOn:
+      - domain     # infraはdomainの定義（Interface）を実現するためにdomainに依存
+      - infra # infra内のサブパッケージ間（factoryからgcsなど）の参照を許可
+  app:
+    mayDependOn:
+      - domain
+      - usecase
+      - infra
+
+# 3. 除外設定（必要に応じて）
+exclude:
+  - vendor
+  - "**/*_test.go"
+  - "archives/**" # ★ ここを追加（archives配下のファイルを完全に無視する）

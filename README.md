@@ -89,19 +89,23 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 
 - [x] **DB 永続化とトランザクション整合性の管理** 🎉 *Done*
   - Cloud Run から Unix ドメインソケット経由で Cloud SQL (PostgreSQL) へ接続。
-  - Cloud SQL (PostgreSQL) を導入。RETURNING 句による ID の即時取得など、効率的な実装を完了。
+  - RETURNING 句による ID の即時取得など、効率的な実装を完了。
   - pgx を活用したコネクションプールの最適化により、並行処理下での安定性を確保。
 
-- [ ] **Database Migration Automation (実務レベルの運用)**
+- [x] **Architecture Testing (理論駆動の実証)** 🎉 *Done*
+  - `go-arch-lint` を導入し、依存関係の静的解析テストを CI に統合。
+  - **DIP (依存性逆転の原則) の強制**: `main.go` から `usecase` への注入時にインターフェースを介することをルール化し、`infra` が `usecase` を汚染しない設計を数学的に担保。
+
+- [ ] **DBマイグレーションの自動化 (実務レベルの運用)**
   - `golang-migrate` の統合による、アプリケーション起動時のスキーマ自動同期。
 
-- [ ] **Robust Error Handling (異常系の設計実証)**
+- [ ] **堅牢なエラーハンドリング (異常系の設計実証)**
   - DB失敗時のストレージロールバックや、並行処理中のエラーハンドリングの型化。
 
-- [ ] **Query API Implementation**
+- [ ] **データ取得用 API の実装**
   - 保存されたメタデータを一覧取得・フィルタリングする Read 系 API の実装。
 
-- [ ] **Observability (運用の透明性) の標準化**
+- [ ] **オブザーバビリティ (運用の透明性) の標準化**
   - slog による構造化ログの導入と、Trace ID を context で伝播させる分散トレーシングの基礎構築。
   - 基盤側でエラーハンドリングを型化し、開発者が「原因特定しやすい」ログ出力を強制する設計。
 
