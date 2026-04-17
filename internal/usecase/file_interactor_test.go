@@ -22,7 +22,8 @@ func (m *benchMockRepo) Close() error {
 func BenchmarkUploadMultipleParallel(b *testing.B) { // *testing.B に修正
 	// 1. 準備
 	repo := &benchMockRepo{}
-	interactor := NewFileInteractor(repo, nil)
+	// 第1引数: Storage用Repo, 第2引数: DB用Repo(今回はnil), 第3引数: Pipeline(今回はnil)
+	interactor := NewFileInteractor(repo, nil, nil)
 
 	// 10個のダミーファイルを生成
 	files := make([]*domain.File, 10)
