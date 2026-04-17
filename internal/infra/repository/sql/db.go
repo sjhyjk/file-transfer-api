@@ -43,6 +43,11 @@ func (r *Repository) Close() {
 
 // SaveMetadata はファイル情報を PostgreSQL に保存します
 func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) error {
+	// ★ 追加：レシーバーが nil の場合はエラーを返す（panic防止）
+	if r == nil || r.Pool == nil {
+		return fmt.Errorf("database repository is not initialized")
+	}
+
 	query := `
         INSERT INTO file_metadata (file_name, file_size, status, source, tags)
         VALUES ($1, $2, $3, $4, $5)

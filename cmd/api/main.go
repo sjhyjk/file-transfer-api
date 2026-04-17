@@ -18,16 +18,18 @@ import (
 func main() {
 	ctx := context.Background()
 
+	// ❌ 削除: os.Setenv("DATABASE_URL", ...) は行わず、環境変数から取得する
 	// 0. DATABASE_URL をセット（IPとパスワードはご自身のものに）
-	os.Setenv("DATABASE_URL", "postgres://app_user:cits9999@8.229.68.93:5432/transfer_metadata?sslmode=disable")
+	//os.Setenv("DATABASE_URL", "postgres://app_user:cits9999@8.229.68.93:5432/transfer_metadata?sslmode=disable")
 
 	// --- [追加] DB接続の初期化 ---
 	log.Println("🔌 Connecting to Cloud SQL...")
 	sqlRepo, err := sql.NewRepository(ctx)
+
+	// 基盤としての判断：DBが必須なら Fatalf で落とす
 	if err != nil {
 		// ここで失敗してもサーバーが動くようにログだけ出す、
-		// あるいは基盤として必須なら log.Fatalf で止める判断をします。
-		log.Printf("❌ DB接続失敗: %v", err)
+		log.Fatalf("❌ DB接続失敗（起動を中止します）: %v", err)
 	} else {
 		defer sqlRepo.Close()
 		log.Println("🎉 Cloud SQL への接続に成功しました！")
@@ -37,7 +39,8 @@ func main() {
 	repo, err := infra.NewStorageRepository(ctx)
 	var initError error
 	if err != nil {
-		log.Printf("⚠️ ストレージリポジトリの初期化に失敗: %v", err)
+		// ストレージがないとAPIとして成立しないため、ここもFatalが望ましい
+		log.Fatalf("⚠️ ストレージリポジトリの初期化に失敗: %v", err)
 		initError = err // エラーを保持しておく
 	}
 
