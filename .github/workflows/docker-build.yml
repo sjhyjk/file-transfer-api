@@ -54,7 +54,7 @@ jobs:
         # 初回デプロイ時は、認証なしアクセスを許可（APIとして公開する場合）
         flags: |
           --allow-unauthenticated
-          --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-api-project:us-west1:file-transfer-db
+          --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
         # ★ ここを追加！
         env_vars: |
           STORAGE_TYPE=gcs
