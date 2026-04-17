@@ -11,17 +11,33 @@ import (
 
 	"file-transfer-api/internal/domain"
 	"file-transfer-api/internal/infra"
+	"file-transfer-api/internal/infra/repository/sql"
 	"file-transfer-api/internal/usecase"
 )
 
 func main() {
 	ctx := context.Background()
 
+	// 0. DATABASE_URL をセット（IPとパスワードはご自身のものに）
+	os.Setenv("DATABASE_URL", "postgres://app_user:cits9999@8.229.68.93:5432/transfer_metadata?sslmode=disable")
+
+	// --- [追加] DB接続の初期化 ---
+	log.Println("🔌 Connecting to Cloud SQL...")
+	sqlRepo, err := sql.NewRepository(ctx)
+	if err != nil {
+		// ここで失敗してもサーバーが動くようにログだけ出す、
+		// あるいは基盤として必須なら log.Fatalf で止める判断をします。
+		log.Printf("❌ DB接続失敗: %v", err)
+	} else {
+		defer sqlRepo.Close()
+		log.Println("🎉 Cloud SQL への接続に成功しました！")
+	}
+
 	// 1. Factory を使ってリポジトリを生成（具象クラスを隠蔽）
 	repo, err := infra.NewStorageRepository(ctx)
 	var initError error
 	if err != nil {
-		log.Printf("⚠️ リポジトリの初期化に失敗（後でブラウザに表示します）: %v", err)
+		log.Printf("⚠️ ストレージリポジトリの初期化に失敗: %v", err)
 		initError = err // エラーを保持しておく
 	}
 
@@ -29,7 +45,8 @@ func main() {
 
 	// 3. Usecaseの初期化（ここでInfraを注入する）
 	// 第2引数に nil を渡すことで、「今は通知先がない」状態を明示します
-	interactor := usecase.NewFileInteractor(repo, nil) // repo が domain.FileRepository 型ならOK
+	// ※現時点では sqlRepo はまだ Interactor に注入していませんが、接続確認はこれで可能です。
+	interactor := usecase.NewFileInteractor(repo, sqlRepo, nil) // repo が domain.FileRepository 型ならOK
 
 	// 4. テストデータの準備（3つのファイルを並行で送る準備）
 	testFiles := []*domain.File{
@@ -96,7 +113,12 @@ func main() {
 			fmt.Fprintf(w, "Check Cloud Run Env Vars (STORAGE_TYPE etc.)")
 			return
 		}
-		fmt.Fprintf(w, "✅ Running! Gain: %.2f%%", improvement)
+		// DB接続状況もヘルスチェックに含めると「基盤」っぽくなります
+		dbStatus := "OK"
+		if sqlRepo == nil {
+			dbStatus = "NG"
+		}
+		fmt.Fprintf(w, "✅ Running! DB Status: %s, Gain: %.2f%%", dbStatus, improvement)
 	})
 
 	// アップロード用のエンドポイント（将来的にここへ POST する）

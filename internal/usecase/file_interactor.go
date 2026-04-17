@@ -10,14 +10,16 @@ import (
 
 // FileInteractor は、ファイル操作のビジネスロジックを管理します
 type FileInteractor struct {
-	repo     domain.FileRepository
-	pipeline domain.DataPipeline // ★ 追加：RAGなど後続処理への通知用
+	repo         domain.FileRepository
+	metadataRepo domain.MetadataRepository // ★ 追加：DB用
+	pipeline     domain.DataPipeline       // ★ 追加：RAGなど後続処理への通知用
 }
 
-func NewFileInteractor(repo domain.FileRepository, pipeline domain.DataPipeline) *FileInteractor {
+func NewFileInteractor(repo domain.FileRepository, metadataRepo domain.MetadataRepository, pipeline domain.DataPipeline) *FileInteractor {
 	return &FileInteractor{
-		repo:     repo,
-		pipeline: pipeline, // ★ 注入（Dependency Injection）
+		repo:         repo,
+		metadataRepo: metadataRepo, // ★ 注入
+		pipeline:     pipeline,     // ★ 注入（Dependency Injection）
 	}
 }
 
@@ -49,12 +51,31 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 			defer wg.Done()
 
 			fmt.Printf("🚀 [Parallel] アップロード開始: %s\n", file.Name)
+
+			// 1. Storage（GCS）への保存
 			if err := i.repo.Save(ctx, file.Name, file.Content); err != nil {
 				// エラーが発生した場合はチャネル経由で呼び出し元に通知
 				errChan <- fmt.Errorf("%s のアップロード失敗: %w", file.Name, err)
 				return
 			}
 
+			// 2. ★ DB（Cloud SQL）へのメタデータ保存 ★
+			meta := &domain.FileMetadata{
+				FileName: file.Name,
+				FileSize: file.Size,
+				Status:   domain.StatusCompleted, // アップロード成功したので完了とする
+				Source:   "direct-upload",
+				Tags:     []string{"parallel-upload", "test"},
+			}
+
+			if i.metadataRepo != nil {
+				if err := i.metadataRepo.SaveMetadata(ctx, meta); err != nil {
+					errChan <- fmt.Errorf("%s のメタデータ保存失敗: %w", file.Name, err)
+					return
+				}
+			}
+
+			// 3. パイプライン通知
 			// ★ 保存に成功したら、即座にパイプラインへ通知を開始する
 			if i.pipeline != nil {
 				if err := i.pipeline.NotifyNewFile(ctx, file.Name); err != nil {
@@ -63,7 +84,7 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 				}
 			}
 
-			fmt.Printf("✅ [Parallel] アップロード完了 & 通知済: %s\n", file.Name)
+			fmt.Printf("✅ [Parallel] 処理完了（GCS+DB+通知）: %s (DB_ID: %d)\n", file.Name, meta.ID)
 		}(f)
 	}
 
