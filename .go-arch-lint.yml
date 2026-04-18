@@ -12,6 +12,7 @@ components:
   infra:
     # internal/infra 直下だけでなく、サブディレクトリも含める
     in: internal/infra/** 
+    in: cmd/**
   app:
     # cmd/api/main.go などを「実行プログラム」として定義
     in: cmd/**
@@ -19,7 +20,6 @@ components:
   # 🚀 [追加] ルート直下のファイルを common として定義
   common:
     in: .
-    recursive: false # ルート直下のファイルのみを対象とし、サブディレクトリ(internal等)は含めない
 
 # 2. 依存関係のルール（理論）
 deps:
@@ -51,3 +51,5 @@ exclude:
   - vendor
   - "**/*_test.go"
   - "archives/**" # ★ ここを追加（archives配下のファイルを完全に無視する）
+  - "internal/**" # 🚀 commonがinternalの中身まで拾わないように除外
+  - "cmd/**"      # 🚀 commonがcmdの中身まで拾わないように除外
