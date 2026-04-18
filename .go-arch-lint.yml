@@ -12,7 +12,6 @@ components:
   infra:
     # internal/infra 直下だけでなく、サブディレクトリも含める
     in: internal/infra/** 
-    in: cmd/**
   app:
     # cmd/api/main.go などを「実行プログラム」として定義
     in: cmd/**
