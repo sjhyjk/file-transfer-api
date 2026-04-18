@@ -4,6 +4,7 @@ import (
 	"context"
 	"file-transfer-api/internal/domain"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -48,6 +49,9 @@ func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) e
 		return fmt.Errorf("database repository is not initialized")
 	}
 
+	// 🚀 構造化ログ：実行前のパラメータ記録
+	slog.DebugContext(ctx, "Executing INSERT metadata", "file_name", f.FileName)
+
 	query := `
         INSERT INTO file_metadata (file_name, file_size, status, source, tags)
         VALUES ($1, $2, $3, $4, $5)
@@ -64,6 +68,8 @@ func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) e
 	).Scan(&f.ID, &f.CreatedAt)
 
 	if err != nil {
+		// 🚀 エラーログ：何が原因で失敗したか属性を付けて記録
+		slog.ErrorContext(ctx, "Database insert failed", "file_name", f.FileName, "error", err)
 		return fmt.Errorf("failed to insert metadata: %w", err)
 	}
 

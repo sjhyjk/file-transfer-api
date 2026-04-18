@@ -5,6 +5,7 @@ import (
 	"file-transfer-api/internal/domain" // 自身のgo.modにあるモジュール名に合わせてください
 	"fmt"
 	"io"
+	"log/slog"
 	"sync" // 並行処理の同期に必要
 )
 
@@ -50,7 +51,7 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 		go func(file *domain.File) {
 			defer wg.Done()
 
-			fmt.Printf("🚀 [Parallel] アップロード開始: %s\n", file.Name)
+			slog.InfoContext(ctx, "🚀 [Parallel] アップロード開始", "file_name", file.Name)
 
 			// 1. Storage（GCS）への保存
 			if err := i.repo.Save(ctx, file.Name, file.Content); err != nil {
@@ -84,7 +85,11 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 				}
 			}
 
-			fmt.Printf("✅ [Parallel] 処理完了（GCS+DB+通知）: %s (DB_ID: %d)\n", file.Name, meta.ID)
+			slog.InfoContext(ctx, "✅ [Parallel] 処理完了",
+				"file_name", file.Name,
+				"db_id", meta.ID,
+				"scope", "GCS+DB+Notify",
+			)
 		}(f)
 	}
 

@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"file-transfer-api/internal/domain"
@@ -13,6 +14,13 @@ import (
 func NewStorageRepository(ctx context.Context) (domain.FileRepository, error) {
 	// 環境変数 STORAGE_TYPE で切り替え (デフォルトは GCS)
 	storageType := os.Getenv("STORAGE_TYPE")
+
+	if storageType == "" {
+		storageType = "GCS" // デフォルト
+	}
+
+	// 🚀 導入ポイント：どのインフラを選択したか記録する
+	slog.InfoContext(ctx, "Initializing storage repository", "type", storageType)
 
 	switch storageType {
 	case "S3":

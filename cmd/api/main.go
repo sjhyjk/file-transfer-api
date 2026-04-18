@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -22,31 +23,35 @@ func main() {
 	// 0. DATABASE_URL をセット（IPとパスワードはご自身のものに）
 	//os.Setenv("DATABASE_URL", "postgres://app_user:cits9999@8.229.68.93:5432/transfer_metadata?sslmode=disable")
 
+	// --- [追加] JSONロガーの初期化 ---
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	// --- [追加] DB接続の初期化 ---
-	log.Println("🔌 Connecting to Cloud SQL...")
+	slog.Info("🔌 Connecting to Cloud SQL...")
 	sqlRepo, err := sql.NewRepository(ctx)
 
-	// 基盤としての判断：DBが必須なら Fatalf で落とす
+	// 修正後：異常系を先に処理して終わらせる（ガード節）
 	if err != nil {
-		// ここで失敗してもサーバーが動くようにログだけ出す、
-		log.Fatalf("❌ DB接続失敗（起動を中止します）: %v", err)
-	} else {
-		defer sqlRepo.Close()
-		log.Println("🎉 Cloud SQL への接続に成功しました！")
+		slog.Error("❌ DB接続失敗（起動を中止します）", "error", err)
+		os.Exit(1) // ここで確実に止まる
 	}
+
+	// ここに来るということは、必ず成功している（elseがいらない）
+	defer sqlRepo.Close()
+	slog.Info("🎉 Cloud SQL への接続に成功しました！")
 
 	// 1. Factory を使ってリポジトリを生成（具象クラスを隠蔽）
 	repo, err := infra.NewStorageRepository(ctx)
 	var initError error
 	if err != nil {
-		// ストレージがないとAPIとして成立しないため、ここもFatalが望ましい
-		log.Fatalf("⚠️ ストレージリポジトリの初期化に失敗: %v", err)
+		slog.Error("⚠️ ストレージリポジトリの初期化に失敗", "error", err)
 		initError = err // エラーを保持しておく
 	}
 
 	// defer repo.Close() // 必要に応じてRepositoryインターフェースにCloseを定義
 
-	// 1. 具体的な実装を受け取る変数を、domain層のインターフェース型として定義し直します
+	// 1. 具体的な実装を受け取る変数を、domain層のインターフェース型として定義（DIPの徹底）
 	var (
 		fileRepo     domain.FileRepository
 		metadataRepo domain.MetadataRepository
@@ -139,10 +144,11 @@ func main() {
 		fmt.Fprintln(w, "Upload endpoint reached")
 	})
 
-	fmt.Printf("\n📡 Starting server on port %s...\n", port)
+	slog.Info("📡 Starting server", "port", os.Getenv("PORT"))
 
 	// サーバーを起動（ここでプログラムが終了せずに待機状態になります）
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("サーバー起動失敗: %v", err)
+	if err := http.ListenAndServe(":"+os.Getenv("PORT"), nil); err != nil {
+		slog.Error("サーバー起動失敗", "error", err)
+		os.Exit(1)
 	}
 }
