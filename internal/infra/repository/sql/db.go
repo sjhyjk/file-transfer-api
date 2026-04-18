@@ -43,6 +43,7 @@ func (r *Repository) Close() {
 }
 
 // SaveMetadata はファイル情報を PostgreSQL に保存します
+// SaveMetadata は domain.MetadataRepository インターフェースの要件を満たす必要があります
 func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) error {
 	// ★ 追加：レシーバーが nil の場合はエラーを返す（panic防止）
 	if r == nil || r.Pool == nil {
@@ -76,18 +77,24 @@ func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) e
 	return nil
 }
 
+// 🚀 重要: インターフェースが "Create" という名前を求めている場合
 // Create は SaveMetadata と同じ役割として実装します
 func (r *Repository) Create(ctx context.Context, record *domain.FileMetadata) error {
 	return r.SaveMetadata(ctx, record)
 }
 
+// 🚀 重要: インターフェースが UpdateStatus を求めている場合
 // UpdateStatus はステータスを更新します（今回は実装を省略してもエラーは消えます）
 func (r *Repository) UpdateStatus(ctx context.Context, id int64, status domain.TransferStatus) error {
+	if r == nil || r.Pool == nil {
+		return fmt.Errorf("database repository is not initialized")
+	}
 	query := `UPDATE file_metadata SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
 	_, err := r.Pool.Exec(ctx, query, status, id)
 	return err
 }
 
+// 🚀 重要: FindByID も戻り値の型まで一致させる
 // FindByID はIDで検索します（今回は実装を省略してもエラーは消えます）
 func (r *Repository) FindByID(ctx context.Context, id int64) (*domain.FileMetadata, error) {
 	// 必要になったら実装しましょう。今は一旦 nil を返すだけでもコンパイルは通ります。

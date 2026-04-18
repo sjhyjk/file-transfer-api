@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	file_transfer_api "file-transfer-api" // ルートパッケージをインポート
 	"fmt"
 	"log"
 	"log/slog"
@@ -27,11 +28,24 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	// --- [追加] DB接続の初期化 ---
-	slog.Info("🔌 Connecting to Cloud SQL...")
+	// 0. DATABASE_URL を取得
+	dbURL := os.Getenv("DATABASE_URL")
+
+	// --- [ここ！] DB接続とマイグレーション ---
+	slog.Info("🔌 Connecting to Cloud SQL and Running Migrations...")
+
+	// A. まずはマイグレーションを実行
+	// sql.RunMigrations は migrations.go で定義する関数
+	// 🚀 ルートで定義した MigrationFS をインフラ層に注入する
+	if err := sql.RunMigrations(dbURL, file_transfer_api.MigrationFS); err != nil {
+		slog.Error("❌ Migration failed（起動を中止します）", "error", err)
+		os.Exit(1)
+	}
+
+	// B. リポジトリを初期化（中でPing確認をしているはず）
 	sqlRepo, err := sql.NewRepository(ctx)
 
-	// 修正後：異常系を先に処理して終わらせる（ガード節）
+	// 異常系を先に処理して終わらせる（ガード節）
 	if err != nil {
 		slog.Error("❌ DB接続失敗（起動を中止します）", "error", err)
 		os.Exit(1) // ここで確実に止まる
