@@ -145,7 +145,7 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 │           └── sql/       # Cloud SQL (PostgreSQL) 永続化・マイグレーション
 │               ├── db.go         # コネクション・CRUD実装
 │               └── migrations.go # golang-migrate 実行ロジック
-├── migrations/         # DB スキーマ管理 (golang-migrate)
+├── migrations/         # DB スキーマ管理 (SQLファイル)
 │   ├── 000001_create_files_table.up.sql
 │   └── 000001_create_files_table.down.sql
 ├── terraform/          # Infrastructure as Code (GCPリソース定義)

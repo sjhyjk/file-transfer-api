@@ -22,11 +22,11 @@ jobs:
     - name: Run Tests
       run: go test -v ./...
 
-    # ✅ ステップ1.5: アーキテクチャの静的解析（追加箇所）
+    # ✅ ステップ1.5: アーキテクチャの静的解析
     - name: Architecture Check
       run: |
-        go install github.com/fe3dback/go-arch-lint@latest
-        go-arch-lint check
+        # インストールと実行を分離せず、直接 go run で実行する
+        go run github.com/fe3dback/go-arch-lint@latest check
 
     # ✅ ステップ2: Google Cloud 認証
     # Workload Identity 等の設定が済むまでは、サービスアカウントキー（JSON）を
