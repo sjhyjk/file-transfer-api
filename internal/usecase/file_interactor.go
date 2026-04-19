@@ -52,7 +52,7 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 		// Go 1.22未満の場合は必要ですが、最新なら不要です
 
 		eg.Go(func() error {
-			slog.InfoContext(ctx, "🚀 [Parallel] アップロード開始", "file_name", file.Name)
+			slog.InfoContext(ctx, "🚀 [Parallel] アップロード開始", "file_name", f.Name)
 
 			// 1. Storage（GCS）への保存
 			if err := i.repo.Save(egCtx, f.Name, f.Content); err != nil {
