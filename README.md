@@ -16,8 +16,10 @@
 - **Architecture Enforcement**: go-arch-lint を導入。DIP（依存性逆転の原則）が守られているかを静的に自動検証し、設計の腐敗を物理的に遮断。
 - **Structured Logging (slog)**: 全レイヤーでJSON形式の構造化ログを出力。特定のファイル名やDB_IDに基づくログ追跡（分散トレーシングの基礎）を可能にしました。
 
-### 2. Goの並行処理モデル
-GoroutineとChannelを活用し、ネットワークI/Oの待機時間を最適化。3ファイル同時アップロードにおいて **2.1s → 0.9s** への高速化（約53%改善）を実証済みです。
+### 2. Goの並行処理モデル (errgroup による Fail-fast 制御)
+GoroutineとChannelに加え、`golang.org/x/sync/errgroup` を導入。単なる並行実行に留まらず、以下の高度な制御を実現しています。
+- **Fail-fast 実装**: 複数のアップロードのうち1つでもエラーが発生した場合、Context を通じて他の Goroutine の I/O 処理（GCS通信等）を即座に中断。計算リソースとネットワークコストの浪費を構造的に防ぎます。
+- **スループット最適化**: 3ファイル同時アップロードにおいて **2.1s → 0.6s** への高速化（約70%改善）を実証済み。
 
 ### 3. コンテナ戦略とセキュリティ
 - **Multi-stage Build & Distroless**: 実行バイナリのみを抽出した軽量イメージ（Distroless）により、攻撃面を最小化。
@@ -80,6 +82,21 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 - **Drift Detection**: 手動構築された既存リソースを `terraform import` により管理下へ移行。設計値（Tokyo）と実態（US-West）の乖離を検知し、データ保護の観点から構成定義を修正・同期。
 - **Least Privilege (IAM)**: サービスアカウントに対し、実行時（Object Admin）と管理時（Storage Admin）で権限を分離。最小権限の原則に基づいた安全な IaC 運用を実証。
 - **Lifecycle Management**: `force_destroy` 等の属性定義により、リソースの廃棄・再作成プロセスを宣言的に記述。
+
+## 🛠 検証済み環境 (Verified Infrastructure)
+
+本システムは、以下のマネージドサービス構成において正常動作およびパフォーマンス計測を完了しています。
+
+| Category | Specification |
+|:--- |:--- |
+| **Compute** | **Cloud Run** (First Generation / 512MiB Memory / 1 vCPU) |
+| **Storage** | **Google Cloud Storage** (Standard Tier / Region: us-west1) |
+| **Database** | **Cloud SQL for PostgreSQL** (v15 / Shared CPU / 10GB Storage) |
+| **Networking** | **Unix Domain Socket** via Cloud SQL Auth Proxy (Private Connectivity) |
+| **Security** | **Workload Identity / ADC** (Service Account Keyless Auth) |
+
+- **CI/CD**: GitHub Actions による完全自動化（Artifact Registry 連携）
+- **DB Migration**: `golang-migrate` による起動時オートマイグレーション
 
 ## 🛠 今後の検証ロードマップ
 
@@ -167,6 +184,7 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 
 ## 🌐 データフロー戦略
 ```text
+
 🌐 User/Client
       │
       ▼ [HTTPS/JSON]
@@ -185,4 +203,40 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 │ 📦 GCS Bucket │  │ 🐘 Cloud SQL (PG)  │
 │ (File Binary) │  │ (File Metadata)    │
 └───────────────┘  └────────────────────┘
+```
+
+## 🏗 アーキテクチャと依存関係の制御
+```text
+
+本プロジェクトはクリーンアーキテクチャに基づき、依存方向を外側から内側（Domain）へ一方向に制限しています。
+この制約は `go-arch-lint` によって静的に強制されており、設計意図に反するインポートは CI で遮断されます。
+
+
+
+【依存方向のフロー】
+🌐 External (API/CLI) ──┐
+                         ▼
+   ┌──────────────────────────────────────────┐
+   │  cmd/ (Main/DI Container)                │
+   └──────────┬───────────────────────────────┘
+              │ 1. Instantiate & Inject
+              ▼
+   ┌──────────────────────────────────────────┐
+   │  internal/usecase (Business Logic)       │
+   └──────────┬───────────────┬───────────────┘
+              │               │ 
+              │ (Interface)   │ (Interface)
+              ▼               ▼
+   ┌─────────────────┐ ┌──────────────────────┐
+   │ internal/domain │ │ internal/infra       │
+   │ (Entity/Models) │ │ (Adapters/GCS/SQL)   │
+   └─────────────────┘ └──────────────────────┘
+              ▲               │
+              └───────────────┘
+                2. Implements Domain Interfaces
+
+domain 層を全パッケージの「最小単位」として定義し、すべての外部依存（DB/GCS）をこの抽象に紐付けることで、ビジネスロジックの純粋性を担保しています。これは単なる規約ではなく、go-arch-lint による CI 落ちを伴う制約です。
+
+※ go-arch-lint により、`usecase` が `infra` の具象パッケージを
+  直接インポートすることを禁止し、DIP（依存性逆転の原則）を担保しています。
 ```

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"sync" // 並行処理の同期に必要
+
+	"golang.org/x/sync/errgroup"
+	// 並行処理の同期に必要
 )
 
 // FileInteractor は、ファイル操作のビジネスロジックを管理します
@@ -38,71 +40,63 @@ func (i *FileInteractor) UploadSingle(ctx context.Context, name string, size int
 	return nil
 }
 
-// UploadMultipleParallel は、Goroutine を用いて複数のファイルを並行してアップロードします。
-// Goの並行処理モデル（Concurrency）を活かし、I/O待ち時間を最小化する「進化的アーキテクチャ」の主実装です。
+// UploadMultipleParallel は、Goroutine と errgroup を用いて複数のファイルを並行してアップロードします。
+// Goの並行処理モデルを活かしたスループット最大化に加え、Fail-fast なエラー制御により
+// 異常系におけるコンピューティングリソースの保護を両立しています。
 func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*domain.File) error {
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(files)) // チャネルによるエラー集約
+	// errgroup.WithContext により、一箇所でもエラーが出ると ctx がキャンセルされる
+	eg, egCtx := errgroup.WithContext(ctx)
 
 	for _, f := range files {
-		wg.Add(1)
+		f := f // ループ変数のキャプチャ
+		// Go 1.22未満の場合は必要ですが、最新なら不要です
 
-		// 各ファイルのアップロードを非同期（Goroutine）で実行
-		go func(file *domain.File) {
-			defer wg.Done()
-
+		eg.Go(func() error {
 			slog.InfoContext(ctx, "🚀 [Parallel] アップロード開始", "file_name", file.Name)
 
 			// 1. Storage（GCS）への保存
-			if err := i.repo.Save(ctx, file.Name, file.Content); err != nil {
-				// エラーが発生した場合はチャネル経由で呼び出し元に通知
-				errChan <- fmt.Errorf("%s のアップロード失敗: %w", file.Name, err)
-				return
+			if err := i.repo.Save(egCtx, f.Name, f.Content); err != nil {
+				return fmt.Errorf("%s のアップロード失敗: %w", f.Name, err)
 			}
 
 			// 2. ★ DB（Cloud SQL）へのメタデータ保存 ★
 			meta := &domain.FileMetadata{
-				FileName: file.Name,
-				FileSize: file.Size,
+				FileName: f.Name,
+				FileSize: f.Size,
 				Status:   domain.StatusCompleted, // アップロード成功したので完了とする
 				Source:   "direct-upload",
 				Tags:     []string{"parallel-upload", "test"},
 			}
 
 			if i.metadataRepo != nil {
-				if err := i.metadataRepo.SaveMetadata(ctx, meta); err != nil {
-					errChan <- fmt.Errorf("%s のメタデータ保存失敗: %w", file.Name, err)
-					return
+				if err := i.metadataRepo.SaveMetadata(egCtx, meta); err != nil {
+					return fmt.Errorf("%s のメタデータ保存失敗: %w", f.Name, err)
 				}
 			}
 
 			// 3. パイプライン通知
 			// ★ 保存に成功したら、即座にパイプラインへ通知を開始する
 			if i.pipeline != nil {
-				if err := i.pipeline.NotifyNewFile(ctx, file.Name); err != nil {
-					errChan <- fmt.Errorf("%s の通知失敗: %w", file.Name, err)
-					return
+				if err := i.pipeline.NotifyNewFile(egCtx, f.Name); err != nil {
+					return fmt.Errorf("%s の通知失敗: %w", f.Name, err)
 				}
 			}
 
 			slog.InfoContext(ctx, "✅ [Parallel] 処理完了",
-				"file_name", file.Name,
+				"file_name", f.Name,
 				"db_id", meta.ID,
 				"scope", "GCS+DB+Notify",
 			)
-		}(f)
+			return nil
+		})
 	}
 
-	// 全ての Goroutine が完了するのを待機
-	wg.Wait()
-	close(errChan)
-
-	// 最初に見つかったエラーを返す（検証用のため簡易実装）
-	for err := range errChan {
-		if err != nil {
-			return err
-		}
+	// eg.Wait() は最初のエラーを返し、その時点で他の全処理の ctx をキャンセルする
+	if err := eg.Wait(); err != nil {
+		slog.ErrorContext(ctx, "❌ 並行処理中にエラーが発生し、中断されました", "error", err)
+		return err
 	}
+
 	return nil
 }
 
