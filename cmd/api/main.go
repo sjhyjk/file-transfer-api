@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"file-transfer-api/internal/domain"
+	"file-transfer-api/internal/handler"
 	"file-transfer-api/internal/infra"
 	"file-transfer-api/internal/infra/repository/sql"
 	"file-transfer-api/internal/usecase"
@@ -78,6 +79,9 @@ func main() {
 	// 3. Usecaseの初期化時には、インターフェース型の変数として渡す
 	// これにより、usecase側には「実体(infra)が何か」を隠したまま「機能(interface)」だけを渡せます
 	interactor := usecase.NewFileInteractor(fileRepo, metadataRepo, nil)
+
+	// ★ 追加：Handler の初期化
+	fileHandler := handler.NewFileHandler(interactor) // 👈 追加
 
 	// 4. テストデータの準備（3つのファイルを並行で送る準備）
 	testFiles := []*domain.File{
@@ -151,6 +155,10 @@ func main() {
 		}
 		fmt.Fprintf(w, "✅ Running! DB Status: %s, Gain: %.2f%%", dbStatus, improvement)
 	})
+
+	// ★ 追加：メタデータ一覧取得エンドポイント
+	// これにより GET /files?limit=20&offset=0 が有効になります
+	http.HandleFunc("/files", fileHandler.HandleListFiles) // 👈 追加
 
 	// アップロード用のエンドポイント（将来的にここへ POST する）
 	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {

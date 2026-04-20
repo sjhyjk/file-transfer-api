@@ -115,6 +115,7 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
   - Cloud Run から Unix ドメインソケット経由で Cloud SQL (PostgreSQL) へ接続。
   - RETURNING 句による ID の即時取得など、効率的な実装を完了。
   - pgx を活用したコネクションプールの最適化により、並行処理下での安定性を確保。
+  - **補償トランザクションの実装**: DB保存失敗時にストレージ側をロールバック（削除）する仕組みを構築し、不整合を防止。
 
 - [x] **Architecture Testing (理論駆動の実証)** 🎉 *Done*
   - `go-arch-lint` を導入し、依存関係の静的解析テストを CI に統合。
@@ -134,8 +135,10 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
   - `golang.org/x/sync/errgroup` を導入し、並行処理中のエラー伝播を型安全に実装。
   - 1つのエラー発生時に `context.Context` を通じて他の処理を即座にキャンセルする Fail-fast 制御により、クラウドのリソース浪費を防止。
 
-- [ ] **データ取得用 API の実装**
-  - 保存されたメタデータを一覧取得・フィルタリングする Read 系 API の実装。
+- [x] **データ取得用 API の実装** 🎉 *Done*
+  - 保存されたメタデータを一覧取得する GET エンドポイントを実装。
+  - limit/offset によるページネーション制御を Usecase 層でバリデーション。
+  - Handler 層を導入し、クリーンアーキテクチャの全レイヤー（Handler -> Usecase -> Domain -> Infra）の結合を完了。
 
 - [ ] **gRPC / スキーマ駆動によるシステム間連携**
   - Protocol Buffers による型定義を先行させ、マイクロサービス化を見据えた高性能・型安全な内部通信の検証。
@@ -150,6 +153,8 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 │   └── api/
 │       └── main.go     # DIを行い、Usecaseを起動
 ├── internal/           # Business Logic (クリーンアーキテクチャのコア)
+│   ├── handler/        # 外部接続（HTTPリクエストの解析・レスポンス生成）
+│   │   └── file_handler.go
 │   ├── domain/         # Entity & Repository Interface (DIPの起点)
 │   │   ├── file.go        # ファイルの実体（Entity）
 │   │   ├── repository.go  # 保存(Repo)と通知(Pipeline)の定義
@@ -158,7 +163,7 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 │   └── infra/          # Infrastructure Adapters (技術的詳細の実装)
 │       ├── storage_factory.go  # インフラ切り替えの司令塔
 │       ├── gcs/                # GCS 具象実装
-│       |   └── repository.go
+│       |   └── gcs_repository.go
 │       └── repository/    # 永続化層の具象実装
 │           └── sql/       # Cloud SQL (PostgreSQL) 永続化・マイグレーション
 │               ├── db.go         # コネクション・CRUD実装

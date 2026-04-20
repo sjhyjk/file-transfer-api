@@ -33,4 +33,6 @@ type MetadataRepository interface {
 	FindByID(ctx context.Context, id int64) (*FileMetadata, error)
 	// SaveMetadata は新規レコードをDBに保存し、生成されたIDと作成日時を構造体に反映します。
 	SaveMetadata(ctx context.Context, metadata *FileMetadata) error
+	// FindAll はページネーション付きでメタデータ一覧を取得します
+	FindAll(ctx context.Context, limit, offset int) ([]*FileMetadata, error)
 }

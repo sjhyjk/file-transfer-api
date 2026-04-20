@@ -100,3 +100,48 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*domain.FileMetada
 	// 必要になったら実装しましょう。今は一旦 nil を返すだけでもコンパイルは通ります。
 	return nil, fmt.Errorf("not implemented")
 }
+
+// FindAll は PostgreSQL からメタデータ一覧を取得します
+func (r *Repository) FindAll(ctx context.Context, limit, offset int) ([]*domain.FileMetadata, error) {
+
+	// FindAll の冒頭に追加しておくと便利です
+	slog.DebugContext(ctx, "Fetching metadata list", "limit", limit, "offset", offset)
+
+	if r == nil || r.Pool == nil {
+		return nil, fmt.Errorf("database repository is not initialized")
+	}
+
+	query := `
+        SELECT id, file_name, file_size, status, source, tags, created_at, updated_at
+        FROM file_metadata
+        ORDER BY created_at DESC
+        LIMIT $1 OFFSET $2;
+    `
+
+	rows, err := r.Pool.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query metadata: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*domain.FileMetadata
+	for rows.Next() {
+		m := &domain.FileMetadata{}
+		err := rows.Scan(
+			&m.ID,
+			&m.FileName,
+			&m.FileSize,
+			&m.Status,
+			&m.Source,
+			&m.Tags,
+			&m.CreatedAt,
+			&m.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		results = append(results, m)
+	}
+
+	return results, nil
+}

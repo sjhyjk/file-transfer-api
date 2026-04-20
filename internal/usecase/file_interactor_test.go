@@ -7,6 +7,7 @@ import (
 	"testing"
 )
 
+// 1. Storage用モック
 // ベンチマーク用のモック（何もしないで成功を返す）
 type benchMockRepo struct{}
 
@@ -24,11 +25,32 @@ func (m *benchMockRepo) Delete(ctx context.Context, n string) error {
 	return nil // ベンチマーク用なので何もしない
 }
 
+// 2. DB（Metadata）用モック
+type benchMockMetaRepo struct{}
+
+func (m *benchMockMetaRepo) Create(ctx context.Context, r *domain.FileMetadata) error { return nil }
+func (m *benchMockMetaRepo) SaveMetadata(ctx context.Context, r *domain.FileMetadata) error {
+	return nil
+}
+func (m *benchMockMetaRepo) UpdateStatus(ctx context.Context, id int64, s domain.TransferStatus) error {
+	return nil
+}
+func (m *benchMockMetaRepo) FindByID(ctx context.Context, id int64) (*domain.FileMetadata, error) {
+	return nil, nil
+}
+
+// これを追加してインターフェースを満たす
+func (m *benchMockMetaRepo) FindAll(ctx context.Context, l, o int) ([]*domain.FileMetadata, error) {
+	return nil, nil
+}
+
 func BenchmarkUploadMultipleParallel(b *testing.B) { // *testing.B に修正
 	// 1. 準備
 	repo := &benchMockRepo{}
-	// 第1引数: Storage用Repo, 第2引数: DB用Repo(今回はnil), 第3引数: Pipeline(今回はnil)
-	interactor := NewFileInteractor(repo, nil, nil)
+	metaRepo := &benchMockMetaRepo{} // nil ではなくモックを渡すように変更
+
+	// 第1引数: Storage用Repo, 第2引数: DB用Repo, 第3引数: Pipeline(今回はnil)
+	interactor := NewFileInteractor(repo, metaRepo, nil)
 
 	// 10個のダミーファイルを生成
 	files := make([]*domain.File, 10)
