@@ -19,6 +19,11 @@ func (m *benchMockRepo) Close() error {
 	return nil
 }
 
+// benchMockRepo に追加
+func (m *benchMockRepo) Delete(ctx context.Context, n string) error {
+	return nil // ベンチマーク用なので何もしない
+}
+
 func BenchmarkUploadMultipleParallel(b *testing.B) { // *testing.B に修正
 	// 1. 準備
 	repo := &benchMockRepo{}

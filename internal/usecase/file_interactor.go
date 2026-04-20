@@ -70,6 +70,13 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 
 			if i.metadataRepo != nil {
 				if err := i.metadataRepo.SaveMetadata(egCtx, meta); err != nil {
+					// ★ ここでロールバック発動！
+					// 失敗した時だけ GCS から消しに行く（補償トランザクション）
+					// egCtx はキャンセルされている可能性があるため、Background を使うのが安全です
+					// ロールバック処理にはキャンセルされていない context.Background() を使うのがコツです
+					rollbackCtx := context.Background()
+					_ = i.repo.Delete(rollbackCtx, f.Name)
+
 					return fmt.Errorf("%s のメタデータ保存失敗: %w", f.Name, err)
 				}
 			}

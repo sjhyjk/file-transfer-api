@@ -9,7 +9,8 @@ import (
 // domain層に置くことで、全ての層から参照可能になります
 type FileRepository interface {
 	Save(ctx context.Context, name string, data io.Reader) error
-	Close() error // これで main.go の defer が動くようになる
+	Delete(ctx context.Context, name string) error // 👈 これを追加
+	Close() error                                  // これで main.go の defer が動くようになる
 
 	// 今後の深化：ビジネスルールに基づくバッチ処理やリトライの抽象化
 	// FindAllByStatus(ctx context.Context, status TransferStatus) ([]*File, error)

@@ -64,3 +64,15 @@ func (r *GCSRepository) Save(ctx context.Context, objectName string, data io.Rea
 
 	return nil
 }
+
+// Delete は指定されたオブジェクトをGCSから削除します（ロールバック用）
+func (r *GCSRepository) Delete(ctx context.Context, objectName string) error {
+	slog.WarnContext(ctx, "GCS object deleting (rollback)", "bucket", r.bucketName, "object", objectName)
+
+	// GCSオブジェクトの削除実行
+	if err := r.client.Bucket(r.bucketName).Object(objectName).Delete(ctx); err != nil {
+		return fmt.Errorf("GCSからの削除失敗: %w", err)
+	}
+
+	return nil
+}
