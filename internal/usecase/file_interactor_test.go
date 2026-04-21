@@ -39,8 +39,8 @@ func (m *benchMockMetaRepo) FindByID(ctx context.Context, id int64) (*domain.Fil
 	return nil, nil
 }
 
-// これを追加してインターフェースを満たす
-func (m *benchMockMetaRepo) FindAll(ctx context.Context, l, o int) ([]*domain.FileMetadata, error) {
+// モックの FindAll を新しいシグネチャに修正
+func (m *benchMockMetaRepo) FindAll(ctx context.Context, q domain.FileSearchQuery) ([]*domain.FileMetadata, error) {
 	return nil, nil
 }
 

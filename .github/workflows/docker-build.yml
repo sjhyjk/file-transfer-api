@@ -29,41 +29,43 @@ jobs:
         go run github.com/fe3dback/go-arch-lint@latest check
 
     # ✅ ステップ2: Google Cloud 認証
-    # Workload Identity 等の設定が済むまでは、サービスアカウントキー（JSON）を
-    # GitHub Secrets (GCP_SA_KEY) に登録して使う方式が一般的です。
-    - name: Google Auth
-      uses: 'google-github-actions/auth@v2'
-      with:
-        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+    # Cloud環境の利用停止に伴い、現在は以下のステップを一時停止中。
+    # 認証情報を更新すれば、即座にフルオートメーションが再開可能な状態で維持しています。
+    # # Workload Identity 等の設定が済むまでは、サービスアカウントキー（JSON）を
+    # # GitHub Secrets (GCP_SA_KEY) に登録して使う方式が一般的です。
+    # - name: Google Auth
+    #   uses: 'google-github-actions/auth@v2'
+    #   with:
+    #     credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-    - name: 'Set up Cloud SDK'
-      uses: 'google-github-actions/setup-gcloud@v2'
+    # - name: 'Set up Cloud SDK'
+    #   uses: 'google-github-actions/setup-gcloud@v2'
 
-    - name: 'Docker Auth'
-      run: |-
-        gcloud auth configure-docker us-west1-docker.pkg.dev
+    # - name: 'Docker Auth'
+    #   run: |-
+    #     gcloud auth configure-docker us-west1-docker.pkg.dev
 
-    # ✅ ステップ3: Dockerビルド & プッシュ
-    # イメージタグに github.sha を使うことで、どのコードがデプロイされたか特定可能にします。
-    - name: Build and Push Docker image
-      run: |
-        docker build -t us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }} .
-        docker push us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}
+    # # ✅ ステップ3: Dockerビルド & プッシュ
+    # # イメージタグに github.sha を使うことで、どのコードがデプロイされたか特定可能にします。
+    # - name: Build and Push Docker image
+    #   run: |
+    #     docker build -t us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }} .
+    #     docker push us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}
 
-    # ✅ ステップ4: Cloud Run へのデプロイ
-    - name: Deploy to Cloud Run
-      uses: 'google-github-actions/deploy-cloudrun@v2'
-      with:
-        service: 'file-transfer-api'
-        image: 'us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}'
-        region: 'us-west1'
-        # 初回デプロイ時は、認証なしアクセスを許可（APIとして公開する場合）
-        flags: |
-          --allow-unauthenticated
-          --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
-        # ★ ここを追加！
-        env_vars: |
-          STORAGE_TYPE=gcs,
-          GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},
-          BUCKET_NAME=file-transfer-bucket-syou-20240121,
-          DATABASE_URL=postgres://app_user:${{ secrets.DB_PASSWORD }}@/transfer_metadata?host=/cloudsql/${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
+    # # ✅ ステップ4: Cloud Run へのデプロイ
+    # - name: Deploy to Cloud Run
+    #   uses: 'google-github-actions/deploy-cloudrun@v2'
+    #   with:
+    #     service: 'file-transfer-api'
+    #     image: 'us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}'
+    #     region: 'us-west1'
+    #     # 初回デプロイ時は、認証なしアクセスを許可（APIとして公開する場合）
+    #     flags: |
+    #       --allow-unauthenticated
+    #       --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
+    #     # ★ ここを追加！
+    #     env_vars: |
+    #       STORAGE_TYPE=gcs
+    #       GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+    #       BUCKET_NAME=file-transfer-bucket-syou-20240121
+    #       DATABASE_URL=postgres://app_user:${{ secrets.DB_PASSWORD }}@/transfer_metadata?host=/cloudsql/${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db

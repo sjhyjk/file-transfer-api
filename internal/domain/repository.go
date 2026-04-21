@@ -16,6 +16,14 @@ type FileRepository interface {
 	// FindAllByStatus(ctx context.Context, status TransferStatus) ([]*File, error)
 }
 
+// FileSearchQuery はフィルタリング条件をカプセル化した構造体です。
+// 将来的に「日付範囲」や「ファイルサイズ」が増えても、インターフェースのシグネチャを壊さずに済みます。
+type FileSearchQuery struct {
+	Tags   []string // タグによる絞り込み（複数指定はAND想定）
+	Limit  int
+	Offset int
+}
+
 // DataPipeline は、保存されたデータを後続の処理（RAGのインジェストなど）へ
 // 渡すための抽象的な「出口」を定義します。
 type DataPipeline interface {
@@ -34,5 +42,8 @@ type MetadataRepository interface {
 	// SaveMetadata は新規レコードをDBに保存し、生成されたIDと作成日時を構造体に反映します。
 	SaveMetadata(ctx context.Context, metadata *FileMetadata) error
 	// FindAll はページネーション付きでメタデータ一覧を取得します
-	FindAll(ctx context.Context, limit, offset int) ([]*FileMetadata, error)
+	// 👈 ここを修正：引数を FileSearchQuery に変更
+	// これにより、Usecase層は「何を検索するか」だけを伝え、
+	// 「どうSQLを書くか」はInfra層が責任を持つという分離が明確になります。
+	FindAll(ctx context.Context, query FileSearchQuery) ([]*FileMetadata, error)
 }

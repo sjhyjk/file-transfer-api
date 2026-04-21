@@ -101,24 +101,38 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*domain.FileMetada
 	return nil, fmt.Errorf("not implemented")
 }
 
-// FindAll は PostgreSQL からメタデータ一覧を取得します
-func (r *Repository) FindAll(ctx context.Context, limit, offset int) ([]*domain.FileMetadata, error) {
-
-	// FindAll の冒頭に追加しておくと便利です
-	slog.DebugContext(ctx, "Fetching metadata list", "limit", limit, "offset", offset)
-
+// FindAll は PostgreSQL からフィルタ条件に合致するメタデータ一覧を取得します
+func (r *Repository) FindAll(ctx context.Context, q domain.FileSearchQuery) ([]*domain.FileMetadata, error) {
 	if r == nil || r.Pool == nil {
 		return nil, fmt.Errorf("database repository is not initialized")
 	}
 
-	query := `
+	// 1. ベースとなるクエリと、動的な引数を保持するスライスを用意
+	// WHERE 1=1 は、後続の条件を "AND ..." で単純に繋げるための定石です。
+	baseQuery := `
         SELECT id, file_name, file_size, status, source, tags, created_at, updated_at
         FROM file_metadata
-        ORDER BY created_at DESC
-        LIMIT $1 OFFSET $2;
+        WHERE 1=1
     `
+	args := []any{}
+	argIdx := 1
 
-	rows, err := r.Pool.Query(ctx, query, limit, offset)
+	// 2. 🚀 動的にフィルタ条件を追加
+	// タグが指定されている場合のみ、PostgreSQLの配列包含演算子 (@>) を追加
+	if len(q.Tags) > 0 {
+		baseQuery += fmt.Sprintf(" AND tags @> $%d", argIdx)
+		args = append(args, q.Tags)
+		argIdx++
+	}
+
+	// 3. 並び替えとページネーションの追加
+	baseQuery += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+	args = append(args, q.Limit, q.Offset)
+
+	// ログに最終的なSQLを出力（デバッグ用）
+	slog.DebugContext(ctx, "Executing filtered FindAll", "query", baseQuery, "tags", q.Tags)
+
+	rows, err := r.Pool.Query(ctx, baseQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query metadata: %w", err)
 	}

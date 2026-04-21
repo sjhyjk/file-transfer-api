@@ -107,10 +107,10 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 	return nil
 }
 
-// FetchMetadataList は、保存されたファイルの一覧を取得します。
-// 実務的な観点から、一度に取得できる件数（limit）に上限を設けるバリデーションを加えています。
-func (i *FileInteractor) FetchMetadataList(ctx context.Context, limit, offset int) ([]*domain.FileMetadata, error) {
-	// 安全装置：一度に100件以上は取得させない（DB負荷対策）
+// FetchMetadataList は、検索条件に基づいてファイルの一覧を取得します。
+// タグによるフィルタリングに加え、DB負荷対策のバリデーションを適用しています。
+func (i *FileInteractor) FetchMetadataList(ctx context.Context, tags []string, limit, offset int) ([]*domain.FileMetadata, error) {
+	// 1. バリデーション（防衛的プログラミング）
 	if limit > 100 {
 		limit = 100
 	}
@@ -118,13 +118,25 @@ func (i *FileInteractor) FetchMetadataList(ctx context.Context, limit, offset in
 		limit = 10
 	}
 
-	slog.InfoContext(ctx, "🔍 メタデータ一覧の取得を開始", "limit", limit, "offset", offset)
+	// 2. 検索クエリの構築（Specification Pattern の適用）
+	query := domain.FileSearchQuery{
+		Tags:   tags,
+		Limit:  limit,
+		Offset: offset,
+	}
+
+	slog.InfoContext(ctx, "🔍 メタデータ検索を開始",
+		"tags", query.Tags,
+		"limit", query.Limit,
+		"offset", query.Offset,
+	)
 
 	if i.metadataRepo == nil {
 		return nil, fmt.Errorf("metadata repository is not initialized")
 	}
 
-	return i.metadataRepo.FindAll(ctx, limit, offset)
+	// 3. Repository の呼び出し（引数を構造体に変更）
+	return i.metadataRepo.FindAll(ctx, query)
 }
 
 // UploadMultipleSerial は、複数のファイルを1つずつ順番にアップロードします。

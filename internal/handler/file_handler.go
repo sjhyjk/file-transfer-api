@@ -24,12 +24,17 @@ func (h *FileHandler) HandleListFiles(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// 1. クエリパラメータの解析 (limit, offset)
+	// 1. クエリパラメータの解析
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 
-	// 2. Usecase の呼び出し
-	files, err := h.interactor.FetchMetadataList(ctx, limit, offset)
+	// 🚀 タグ検索用のパラメータ取得
+	// ?tags=golang,aws のようなカンマ区切り、または ?tags=golang&tags=aws の複数指定を想定
+	tags := r.URL.Query()["tags"]
+	// ※ tags := r.URL.Query().Get("tags") ではなく []string で取得できるこの書き方が便利です
+
+	// 2. Usecase の呼び出し（tags を追加）
+	files, err := h.interactor.FetchMetadataList(ctx, tags, limit, offset)
 	if err != nil {
 		http.Error(w, "Failed to fetch files: "+err.Error(), http.StatusInternalServerError)
 		return
