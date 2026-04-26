@@ -1,18 +1,18 @@
 version: "2"  # これが v2 系では必須になりました
 
-linters-settings:
-  errcheck:
-    # 以下の関数については、戻り値をチェックしなくても OK とする設定
-    exclude-functions:
-      - fmt.Fprintf
-      - fmt.Fprintln
-      - fmt.Printf
-      - fmt.Print
+golangci-lint:  # 全てをこの下にまとめる必要があります
+  linters-settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Printf
+        - fmt.Print
 
-linters:
-  enable:
-    - errcheck
-    - gosimple
-    - staticcheck
-    - unused
-    - govet
+  linters:
+    enable:
+      - errcheck
+      - gosimple
+      - staticcheck
+      - unused
+      - govet
