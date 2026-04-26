@@ -8,6 +8,9 @@ import (
 
 	"file-transfer-api/internal/domain"
 	"file-transfer-api/internal/infra/gcs"
+	"file-transfer-api/internal/infra/local"
+	"file-transfer-api/internal/infra/repository/inmemory"
+	"file-transfer-api/internal/infra/repository/sql"
 )
 
 // NewStorageRepository は環境変数に応じて適切なリポジトリを返します
@@ -23,6 +26,12 @@ func NewStorageRepository(ctx context.Context) (domain.FileRepository, error) {
 	slog.InfoContext(ctx, "Initializing storage repository", "type", storageType)
 
 	switch storageType {
+	case "LOCAL":
+		// 🚀 新設：ローカルの /tmp や ./data に保存するリポジトリ
+		// これを作れば GCP が止まっていても API が動かせる！
+		// ディレクトリ `./data` がなければ自動で作るような実装にすると親切です
+		return local.NewLocalRepository("./data"), nil
+
 	case "S3":
 		// 将来的にここに AWS S3 の初期化を書く
 		return nil, fmt.Errorf("S3 repository is not implemented yet")
@@ -41,4 +50,17 @@ func NewStorageRepository(ctx context.Context) (domain.FileRepository, error) {
 
 		return gcs.NewGCSRepository(ctx, bucketName, keyFile)
 	}
+}
+
+// NewMetadataRepository は環境に応じて DB 実装を切り替える
+func NewMetadataRepository(ctx context.Context) (domain.MetadataRepository, error) {
+	dbType := os.Getenv("DB_TYPE")
+
+	if dbType == "INMEMORY" {
+		slog.InfoContext(ctx, "Using In-Memory Metadata Repository")
+		return inmemory.NewInMemoryRepository(), nil
+	}
+
+	// デフォルトは実機の PostgreSQL
+	return sql.NewRepository(ctx)
 }
