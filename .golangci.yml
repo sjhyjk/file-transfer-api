@@ -1,18 +1,21 @@
 version: "2"  # これが v2 系では必須になりました
 
-golangci-lint:  # 全てをこの下にまとめる必要があります
-  linters-settings:
-    errcheck:
-      exclude-functions:
-        - fmt.Fprintf
-        - fmt.Fprintln
-        - fmt.Printf
-        - fmt.Print
+run:
+  timeout: 5m
+  # ここに working-directory などの実行時設定が入ります
 
-  linters:
-    enable:
-      - errcheck
-      - gosimple
-      - staticcheck
-      - unused
-      - govet
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - fmt.Printf
+      - fmt.Print
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - staticcheck
+    - unused
+    - govet
