@@ -1,3 +1,5 @@
+version: "2"  # これが v2 系では必須になりました
+
 linters-settings:
   errcheck:
     # 以下の関数については、戻り値をチェックしなくても OK とする設定
