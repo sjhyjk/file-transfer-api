@@ -4,7 +4,8 @@ run:
   timeout: 5m
   # ここに working-directory などの実行時設定が入ります
 
-linters-settings:
+# 「linters-settings」ではなく「linter」に変更されています
+linter:
   errcheck:
     exclude-functions:
       - fmt.Fprintf
@@ -12,6 +13,7 @@ linters-settings:
       - fmt.Printf
       - fmt.Print
 
+# 「linters」ではなく「issues」セクションなどで管理する形式に統合が進んでいます
 linters:
   enable:
     - errcheck
