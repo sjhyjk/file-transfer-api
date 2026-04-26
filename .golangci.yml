@@ -4,20 +4,20 @@ run:
   timeout: 5m
   # ここに working-directory などの実行時設定が入ります
 
-# 「linters-settings」ではなく「linter」に変更されています
-linter:
-  errcheck:
-    exclude-functions:
-      - fmt.Fprintf
-      - fmt.Fprintln
-      - fmt.Printf
-      - fmt.Print
-
-# 「linters」ではなく「issues」セクションなどで管理する形式に統合が進んでいます
 linters:
+  # disable-all は linters.default: none に変更
+  default: none
   enable:
     - errcheck
     - gosimple
     - staticcheck
     - unused
     - govet
+  # 移行ガイドに従い、linters-settings ではなく settings を使用
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Printf
+        - fmt.Print
