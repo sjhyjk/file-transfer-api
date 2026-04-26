@@ -79,7 +79,7 @@
   - **Credential Zero**: Artifact Registry 連携と **Workload Identity** による **Keyless 認証** (ADC活用) を確立し、認証情報のバイナリ内包を完全に排除。
 
 - [x] **IaC 化 (Terraform)による再現性の確保** 🎉 *Done*
-  - **構成同期（Drift Detection）**: 既存リソースを `terraform import` により管理下へ移行し、コードと実環境の完全な同期を完遂。
+  - **構成同期（Drift Detection）**: 既存リソースの状態をコードへ正確に反映。**Drift（環境差分）を完全に解消**し、コードと実環境の完全な同期を完遂。
   - **最小権限の原則 (Least Privilege)**: サービスアカウントに対し、実行時（Object Admin）と管理時（Storage Admin）の権限を分離。セキュアな IAM 設計を実証。
   - **ライフサイクル管理**: `force_destroy` 等の属性定義により、リソースの廃棄・再作成プロセスを宣言的に記述。
 
