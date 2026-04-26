@@ -1,22 +1,21 @@
 version: "2"  # これが v2 系では必須になりました
 
-golangci-lint:
-  run:
-    timeout: 5m
-    # ここに working-directory などの実行時設定が入ります
+run:
+  timeout: 5m
+  # ここに working-directory などの実行時設定が入ります
 
-  linters-settings:
-    errcheck:
-      exclude-functions:
-        - fmt.Fprintf
-        - fmt.Fprintln
-        - fmt.Printf
-        - fmt.Print
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - fmt.Printf
+      - fmt.Print
 
-  linters:
-    enable:
-      - errcheck
-      - gosimple
-      - staticcheck
-      - unused
-      - govet
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - staticcheck
+    - unused
+    - govet
