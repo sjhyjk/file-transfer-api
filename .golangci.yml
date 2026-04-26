@@ -9,8 +9,7 @@ linters:
   default: none
   enable:
     - errcheck
-    - gosimple
-    - staticcheck
+    - staticcheck # これに gosimple の機能が含まれています
     - unused
     - govet
   # 移行ガイドに従い、linters-settings ではなく settings を使用
