@@ -5,7 +5,7 @@ golangci-lint:
     timeout: 5m
     # ここに working-directory などの実行時設定が入ります
 
-linters-settings:
+  linters-settings:
     errcheck:
       exclude-functions:
         - fmt.Fprintf
