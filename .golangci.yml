@@ -1,0 +1,16 @@
+linters-settings:
+  errcheck:
+    # 以下の関数については、戻り値をチェックしなくても OK とする設定
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - fmt.Printf
+      - fmt.Print
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - staticcheck
+    - unused
+    - govet
