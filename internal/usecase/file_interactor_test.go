@@ -2,8 +2,10 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"file-transfer-api/internal/domain"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -62,4 +64,51 @@ func BenchmarkUploadMultipleParallel(b *testing.B) { // *testing.B に修正
 	for i := 0; i < b.N; i++ {
 		_ = interactor.UploadMultipleParallel(context.Background(), files)
 	}
+}
+
+// 3. テスト専用：エラーを発生させるためのストレージモック
+type errorMockRepo struct {
+	benchMockRepo        // 既存の成功用モックを埋め込み（DeleteやCloseを使い回す）
+	failOnName    string // この名前のファイルが来たらエラーにする
+}
+
+// Save をオーバーライドして、特定の条件で失敗させる
+func (m *errorMockRepo) Save(ctx context.Context, n string, r io.Reader) error {
+	if n == m.failOnName {
+		return errors.New("simulated storage error")
+	}
+	return nil
+}
+
+// --- [テストコードの追加] ---
+
+func TestUploadMultipleParallel_FailFast(t *testing.T) {
+	// 1. 準備：2番目のファイルだけ失敗するように設定
+	failFileName := "fail-me.txt"
+	repo := &errorMockRepo{failOnName: failFileName}
+	metaRepo := &benchMockMetaRepo{}
+
+	interactor := NewFileInteractor(repo, metaRepo, nil)
+
+	testFiles := []*domain.File{
+		domain.NewFile("success-1.txt", 10, nil),
+		domain.NewFile(failFileName, 10, nil), // ここでエラーを発生させる
+		domain.NewFile("success-2.txt", 10, nil),
+	}
+
+	// 2. 実行：context.Background() を渡す
+	err := interactor.UploadMultipleParallel(context.Background(), testFiles)
+
+	// 3. 検証：errgroup によってエラーが呼び出し元に返ってくるか
+	if err == nil {
+		t.Fatal("エラーが発生するはずですが、nilが返されました")
+	}
+
+	// 文字列の完全一致ではなく、中身が含まれているかを確認する
+	expectedPart := "simulated storage error"
+	if !strings.Contains(err.Error(), expectedPart) {
+		t.Errorf("エラーメッセージに '%s' が含まれていません: %v", expectedPart, err)
+	}
+
+	t.Logf("✅ 期待通りエラーをキャッチし、並行処理を中断しました: %v", err)
 }
