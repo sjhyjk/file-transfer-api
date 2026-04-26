@@ -11,9 +11,18 @@
 
 - **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、外部（Repository/Pipeline）との契約となるインターフェースを配置。全レイヤーの依存が向かう「不動の頂点」として定義。
 - **Usecase**: ビジネスロジックの純粋性を維持。`infra` 層の具象実装を一切参照せず、`domain` のインターフェースのみを介して並行アップロードや通知を制御。
-- **Infrastructure (Factory Pattern)**: `STORAGE_TYPE` 等の環境変数に基づき、GCS や S3（予定）を動的に切り替える **Plug-and-Play** な構成を採用。
+- **Infrastructure (Factory Pattern)**: `STORAGE_TYPE` 等の環境変数に基づき、GCS/Local Storage/S3（予定）、Cloud SQL/In-Memory DB を動的に切り替える **Plug-and-Play** な構成を採用。
 - **cmd (Main Component)**: 依存注入（DI）と起動のみに特化。アプリケーションを「何として（API/CLI）」動かすかを外部から注入可能にし、コアロジックの再利用性を最大化。
 - **Observability**: `slog` による構造化ログを全層に適用。`db_id` 等のコンテキストを伝播させ、分散トレーシングを見据えた「運用の透明性」を確保。
+
+## 🛠 Quick Start (Local Development)
+
+外部インフラ（GCP）に依存せず、ローカル環境のみで API サーバーを即座に起動し、並行処理の挙動を検証可能です。
+
+```bash
+# 依存関係なし（In-Memory / Local Storage）で起動
+STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
+```
 
 ## ⚡ Go の並行処理モデルの実測検証
 
@@ -119,7 +128,11 @@
 │       ├── factory.go  # インフラ切り替えの司令塔
 │       ├── gcs/                # GCS 具象実装
 │       |   └── gcs_repository.go
+│       ├── local/         # ローカルファイルシステム実装
+│       |   └── local_repository.go
 │       └── repository/    # 永続化層の具象実装
+│           ├── inmemory/  # 高速な検証を可能にするインメモリDB実装
+│           │   └── memory_repository.go
 │           └── sql/       # Cloud SQL (PostgreSQL) 永続化・マイグレーション
 │               ├── db.go         # コネクション・CRUD実装
 │               └── migrations.go # golang-migrate 実行ロジック

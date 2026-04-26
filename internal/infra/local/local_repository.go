@@ -29,10 +29,21 @@ func (r *LocalRepository) Save(ctx context.Context, name string, data io.Reader)
 	if err != nil {
 		return fmt.Errorf("local save failed: %w", err)
 	}
-	defer f.Close()
+
+	// deferの中でエラーをチェックし、関数の戻り値 err に代入する
+	defer func() {
+		closeErr := f.Close()
+		if err == nil { // 本体の処理が成功している場合のみ、Closeのエラーを反映
+			err = closeErr
+		}
+	}()
 
 	_, err = io.Copy(f, data)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to copy data: %w", err)
+	}
+
+	return nil
 }
 
 func (r *LocalRepository) Delete(ctx context.Context, name string) error {
