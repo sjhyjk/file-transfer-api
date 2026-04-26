@@ -36,12 +36,26 @@ jobs:
         # 全パッケージが正しくビルド可能か、Dockerビルド前に検証します
         go build -v ./... # 全パッケージのコンパイルチェック（バイナリは作成せず検証のみ）
 
-    # ✅ ステップ2: ユニットテストの実行
+    # ✅ ステップ2: 高度な静的解析 (Linter)
+    # go vet よりも遥かに厳しいチェック（未使用変数、複雑度、スペルミス等）を行い、
+    # チーム開発における「読みやすさ」を機械的に担保します。
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+
+    # ✅ ステップ3: ユニットテスト（モック環境）の実行
     # これが失敗すると、下のビルドやデプロイは実行されません（安全！）
+    # env を追加し、テストが「モックモード」で動くことを明示します。
     - name: Run Tests
+      env:
+        # コード側で os.Getenv("STORAGE_TYPE") を見ている場合、
+        # ここで mock や local を渡すことで、CI上での不要なエラーを防ぎます。
+        STORAGE_TYPE: mock
+        DATABASE_URL: postgres://dummy:dummy@localhost:5432/dummy
       run: go test -v ./...
 
-    # ✅ ステップ3: アーキテクチャの静的解析
+    # ✅ ステップ4: アーキテクチャの静的解析
     # 設計原則（DIP等）がコードレベルで守られているかを強制します。
     - name: Architecture Check
       run: |
@@ -55,7 +69,7 @@ jobs:
     # workflow_dispatch 時のみ実行される
     # ==========================================
     
-    # ✅ ステップ4: Google Cloud 認証
+    # ✅ ステップ5: Google Cloud 認証
     # Keyless（Workload Identity）移行を見据えた構成でセキュアに認証します。
     # 認証情報を更新すれば、即座にフルオートメーションが再開可能な状態で維持しています。
     # Workload Identity 等の設定が済むまでは、サービスアカウントキー（JSON）を
@@ -68,7 +82,7 @@ jobs:
         # workload_identity_provider: '${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}'
         credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-    # ✅ ステップ5: クラウド環境・Docker 認証
+    # ✅ ステップ6: クラウド環境・Docker 認証
     - name: 'Set up Cloud SDK'
       if: github.event_name == 'workflow_dispatch'
       uses: 'google-github-actions/setup-gcloud@v2'
@@ -78,7 +92,7 @@ jobs:
       run: |-
         gcloud auth configure-docker us-west1-docker.pkg.dev
 
-    # ✅ ステップ6: Dockerビルド & プッシュ
+    # ✅ ステップ7: Dockerビルド & プッシュ
     # Secretを参照するため手動実行に限定。SHAタグでトレーサビリティを確保します。
     - name: Build and Push Docker image
       if: github.event_name == 'workflow_dispatch'
@@ -86,7 +100,7 @@ jobs:
         docker build -t us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }} .
         docker push us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}
 
-    # ✅ ステップ7: Cloud Run へのデプロイ
+    # ✅ ステップ8: Cloud Run へのデプロイ
     # 適切な環境変数とDB接続を構成し、最終的なリリースを実行します。
     - name: Deploy to Cloud Run
       if: github.event_name == 'workflow_dispatch'

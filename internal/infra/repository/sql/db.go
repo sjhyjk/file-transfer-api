@@ -74,6 +74,14 @@ func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) e
 		return fmt.Errorf("failed to insert metadata: %w", err)
 	}
 
+	// ✨ 修正ポイント：成功ログを追加
+	// 保存後の ID をログに出すことで、フロントエンドのログと DB の中身を即座に紐付けられます
+	slog.InfoContext(ctx, "Metadata saved successfully",
+		"db_id", f.ID,
+		"file_name", f.FileName,
+		"status", f.Status,
+	)
+
 	return nil
 }
 
@@ -91,6 +99,12 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status domain.T
 	}
 	query := `UPDATE file_metadata SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`
 	_, err := r.Pool.Exec(ctx, query, status, id)
+
+	if err != nil {
+		// 🚀 ここで db_id (id) を出す！
+		slog.ErrorContext(ctx, "Failed to update status", "db_id", id, "status", status, "error", err)
+		return err
+	}
 	return err
 }
 

@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -21,7 +22,11 @@ import (
 
 // RunMigrations は指定されたDB URLに対してマイグレーションを実行します
 // RunMigrations は外部から資産 (fs) を受け取る設計にする (DI)
-func RunMigrations(dbURL string, fs embed.FS) error {
+func RunMigrations(ctx context.Context, dbURL string, fs embed.FS) error {
+	slog.InfoContext(ctx, "Starting database migrations...")
+
+	// golang-migrate 自体は ctx を直接取らないことが多いですが、
+	// ログ出力に ctx を渡すことで、起動プロセスの追跡が可能になります
 	// 🚀 iofs (In-Memory File System) ドライバを作成
 	d, err := iofs.New(fs, "migrations") // fs 内の "migrations" フォルダを参照
 	if err != nil {

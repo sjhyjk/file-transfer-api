@@ -6,55 +6,14 @@
 
 ## 🚀 実装の柱
 
-### 1. クリーンアーキテクチャによる疎結合設計
-依存性の逆転（DIP）を徹底し、ビジネスロジックを特定の実行環境やインフラから分離。さらに go-arch-lint を用いた Architecture Testing と、slog による構造化ログを全層に導入し、本番運用に耐えうる「堅牢さ」と「観測可能性」を確保しています。
+### 🏛️ クリーンアーキテクチャによる疎結合設計
+依存性の逆転（DIP）を徹底し、ビジネスロジックを特定の実行環境やインフラから分離。さらに `go-arch-lint` を用いた **Architecture Testing** 導入することで、設計の腐敗を静的に遮断し、長期的な保守性とポータビリティを担保しています。
 
-- **Domain**: ファイルエンティティとリポジトリの外部通信用（Repository/Pipeline）インターフェースを配置。数学的な「定義の抽象化」を意識し、全レイヤーの依存の頂点として定義。
-- **Usecase**: 並行アップロードおよび通知の制御ロジックをカプセル化。`infra` 層の存在を一切知らず、`domain` インターフェースのみを介して動作。
-- **Infrastructure (Factory Pattern)**: 環境変数 (`STORAGE_TYPE`) 一つで GCS や S3（予定）の実装を動的に切り替える「交換可能性」を実現。
-- **cmd**: アプリケーションの起動（Dependency Injection）を担当するエントリポイント。レイヤー構造の外側に配置することで、実行環境（CLI/API等）の交換可能性を確保。
-- **Architecture Enforcement**: go-arch-lint を導入。DIP（依存性逆転の原則）が守られているかを静的に自動検証し、設計の腐敗を物理的に遮断。
-- **Structured Logging (slog)**: 全レイヤーでJSON形式の構造化ログを出力。特定のファイル名やDB_IDに基づくログ追跡（分散トレーシングの基礎）を可能にしました。
-
-### 2. Goの並行処理モデル (errgroup による Fail-fast 制御)
-GoroutineとChannelに加え、`golang.org/x/sync/errgroup` を導入。単なる並行実行に留まらず、以下の高度な制御を実現しています。
-- **Fail-fast 実装**: 複数のアップロードのうち1つでもエラーが発生した場合、Context を通じて他の Goroutine の I/O 処理（GCS通信等）を即座に中断。計算リソースとネットワークコストの浪費を構造的に防ぎます。
-- **スループット最適化**: 3ファイル同時アップロードにおいて **1.6s → 0.6s** への高速化（約62%改善）を実証済み。
-
-### 3. コンテナ戦略とセキュリティ
-- **Multi-stage Build & Distroless**: 実行バイナリのみを抽出した軽量イメージ（Distroless）により、攻撃面を最小化。
-- **Environment Variables**: `.env` による設定の外部注入により、機密情報のハードコードを排除し、商用グレードのリンター警告（`SecretsUsedInArgOrEnv`）をクリア。
-- **Security & Auth**: ローカルではサービスアカウントキーを使用し、Cloud Run 上では **ADC (Application Default Credentials)** を活用。ソースコードに認証情報を一切含めない、クラウドネイティブなセキュリティ設計を採用。
-
-### 4. オブザーバビリティ (Observability)
-- **Structured Logging (log/slog)**: 全レイヤーで JSON 形式の構造化ログを出力。file_name や db_id などの属性を付与することで、Cloud Logging 等での高度なフィルタリングと原因特定を可能にしました。
-- **Context-Aware Design**: ログ出力を含む全プロセスで context.Context を保持。並行処理におけるキャンセレーション制御に加え、分散トレーシング（Trace ID の伝播）に対応可能な土台を構築済みです。
-
-### 5. CI/CD パイプライン (GitHub Actions)
-「Docker Desktop に依存しない開発」を実現するため、GitHub Actions によるフルオートメーションを構築。
-
-- **Continuous Integration**: `go test` による自動ユニットテストを実行し、品質が担保されたコードのみをビルド。
-- **Continuous Deployment**: Artifact Registry への自動ビルド・プッシュ、および **Cloud Run へのデプロイフロー** を確立。`workflow_dispatch` による制御を導入し、環境保護とコスト最適化を両立した実務的運用を実証。
-- **Vulnerability Scanning**: Artifact Analysis を有効化し、OS/パッケージレベルの脆弱性を自動検知するセキュアなサプライチェーンを構築。
-
-### 6. データベース永続化とステート管理
-Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期して、ファイル名・サイズ・ステータス等のメタデータを永続化。
-- **Schema as Code**: マイグレーションロジックをインフラ層に、SQL資産をルートの migrations/ に配置。iofs ドライバを介した依存性注入（DI）により、アプリケーションとDBスキーマのライフサイクルを安全に同期させています。
-
-### 🔌 接続アーキテクチャの最適化
-- **Unixドメインソケット接続**: Cloud RunからCloud SQLへの接続には、パブリックIP経由ではなく `/cloudsql/` ディレクトリを介したUnixドメインソケットを採用。高速かつセキュアな通信経路を確保し、ネットワークオーバーヘッドを最小化。
-- **コネクションプールの最適化**: `pgxpool` を活用し、並行処理下での効率的な接続管理を実現。
-- **Secret管理の徹底**: パスワード等の機密情報は GitHub Secrets 経由でデプロイ時に動的に注入。ソースコードやイメージ内への機密情報の混入を完全に排除。
-- **抽象化によるポータビリティ**: インターフェースによる実装の隠蔽を行い、DB実装（PostgreSQL等）の交換可能性を担保。
-
-## 🔍 検索・フィルタリング戦略 (Metadata Filtering)
-
-単なる一覧取得に留まらず、複雑な条件検索をクリーンアーキテクチャの作法を守りながら実装。マネージドサービスのコストとパフォーマンスのバランスを考慮した設計を実証しています。
-
-- **Specification Pattern のエッセンス**: 検索条件を `FileSearchQuery` 構造体にカプセル化。Usecase 層が「DBの検索仕様」を抽象化して扱うことで、将来的な検索条件の増殖に強い設計を実現。
-- **動的クエリ構築**: `Infrastructure` 層にて、PostgreSQL のプレースホルダを安全に管理しつつ、リクエストに応じてSQLを動的に組み立てるロジックを実装。SQLインジェクションを完全に排除。
-- **PostgreSQL 配列演算子の活用**: `tags` カラムに配列型を採用。包含演算子 (`@>`) を用いた高速なフィルタリングを実現し、GINインデックスによる検索最適化までを視野に入れた設計。
-- **マルチプロトコル対応の玄関口**: HTTP クエリパラメータ (`?tags=...`) からの入力を、Domain層の抽象型へ安全に変換。今後の gRPC 実装においても、同一の Usecase ロジックを再利用可能な構造を構築。
+- **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、外部（Repository/Pipeline）との契約となるインターフェースを配置。全レイヤーの依存が向かう「不動の頂点」として定義。
+- **Usecase**: ビジネスロジックの純粋性を維持。`infra` 層の具象実装を一切参照せず、`domain` のインターフェースのみを介して並行アップロードや通知を制御。
+- **Infrastructure (Factory Pattern)**: `STORAGE_TYPE` 等の環境変数に基づき、GCS や S3（予定）を動的に切り替える **Plug-and-Play** な構成を採用。
+- **cmd (Main Component)**: 依存注入（DI）と起動のみに特化。アプリケーションを「何として（API/CLI）」動かすかを外部から注入可能にし、コアロジックの再利用性を最大化。
+- **Observability**: `slog` による構造化ログを全層に適用。`db_id` 等のコンテキストを伝播させ、分散トレーシングを見据えた「運用の透明性」を確保。
 
 ## ⚡ Go の並行処理モデルの実測検証
 
@@ -73,24 +32,14 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 
 **→ パフォーマンス改善率: 62.77%**
 
-#### プロフェッショナル・ベンチマーク (Go standard `testing.B` による実測)
+#### 📊 プロフェッショナル・ベンチマーク (Go standard `testing.B` による実測)
 モック環境下での10ファイル同時処理コスト（530回の試行平均）:
 - **Average Latency**: **2.56 ms / op**
 - **Memory Efficiency**: **1,427 B / op** (極めて低メモリな実行を実現)
 - **Allocations**: **43 allocs / op**
 
-**考察**: 10並列の処理においてもオーバーヘッドは 3ms 未満に抑えられており、大規模なデータ転送基盤としてのスケーラビリティを定量的に実証済みです。
-
-### 考察と設計判断
-本検証により、Go の軽量スレッド（Goroutine）を活用することで、インフラ構成を変更することなく I/O ボトルネックを大幅に解消できることを実証しました。このデータは、将来的な大規模データ転送を伴うドメイン（データインジェスト基盤等）において、リソースコストを維持したままスループットを向上させるための重要な「設計判断材料」となります。
-
-## ☁️ Infrastructure as Code (Terraform)
-
-本プロジェクトでは、クラウド資源（GCSバケット・IAM権限）を Terraform によりコード管理しています。
-
-- **Drift Detection**: 手動構築された既存リソースを `terraform import` により管理下へ移行。設計値（Tokyo）と実態（US-West）の乖離を検知し、データ保護の観点から構成定義を修正・同期。
-- **Least Privilege (IAM)**: サービスアカウントに対し、実行時（Object Admin）と管理時（Storage Admin）で権限を分離。最小権限の原則に基づいた安全な IaC 運用を実証。
-- **Lifecycle Management**: `force_destroy` 等の属性定義により、リソースの廃棄・再作成プロセスを宣言的に記述。
+### 📝 設計判断への活用
+本検証により、Go の軽量スレッド（Goroutine）を活用することで、**インフラ構成を変更せずに I/O ボトルネックを構造的に解消可能**であることを実証しました。この定量的なデータは、将来的な大規模データインジェスト基盤の設計における重要な判断材料となります。
 
 ## 🛠 検証済み環境 (Verified Infrastructure)
 
@@ -112,24 +61,27 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 📂 Database & Persistence Strategy
 
 - [x] **DB 永続化とトランザクション整合性の管理** 🎉 *Done*
-  - **高度な検索実装**: **Specification Pattern** を導入。PostgreSQL の**配列演算子・GINインデックス**による動的かつ高速なフィルタリングを実現。
+  - **高度な検索実装**: **Specification Pattern** を導入。PostgreSQL の**配列演算子・GINインデックス**による動的かつ高速なフィルタリングを実現。プレースホルダによる動的クエリ構築により、SQLインジェクションを完全に排除。
   - **整合性担保**: **補償トランザクション**を実装し、DB保存失敗時の GCS ロールバックを自動化。`pgxpool` と Unix ドメインソケットを用いたセキュアな接続基盤を構築。
-  - **クリーンなAPI設計**: `limit/offset` によるページネーションバリデーションを全レイヤー（Handler -> Usecase -> Domain -> Infra）で統合。
+  - **クリーンなAPI設計**: HTTP クエリパラメータを Domain 層の抽象型へ変換する **「マルチプロトコル対応」** の玄関口を実装。`limit/offset` によるページネーションバリデーションを全レイヤー（Handler -> Usecase -> Domain -> Infra）で統合。
 
 - [x] **DBマイグレーションの自動化** 🎉 *Done*
-  - **Single Binary Strategy**: `golang-migrate` と `embed` を活用し、バイナリ内包型の自動マイグレーションを実現。環境差分による不具合を**仕組みで排除**。
+  - **Single Binary Strategy**: `golang-migrate` と `io/fs`(embed) を活用し、バイナリ内包型の自動マイグレーションを実現。環境差分による不具合を**仕組みで排除**。
 
 ⚙️ CI/CD & Cloud Native
 
 - [x] **GitHub Actions による高度な CI 構築** 🎉 *Done*
-  - **品質と安全の自動化**: `go test` による自動テスト、`testing.B` による性能監視、および Artifact Analysis による脆弱性スキャンを統合。
+  - **安全性と性能の自動化**: `go test` による自動テスト、`testing.B` による性能監視、および商用グレードのリンターによる**機密情報混入の静的検知**を統合。
   - **運用最適化**: `workflow_dispatch` を導入し、コストや状況に応じた**柔軟な手動デプロイ制御（If-conditional flow）**を確立。
 
 - [x] **Cloud Run への自動デプロイ (CD)** 🎉 *Done*
-  - Artifact Registry 連携によるコンテナデプロイと **Workload Identity** による **Keyless 認証**を見据えたセキュアな運用を確立。
+  - **Attack Surface 最小化**: **Distroless** イメージを採用し、実行環境の脆弱性リスクを根本から低減。
+  - **Credential Zero**: Artifact Registry 連携と **Workload Identity** による **Keyless 認証** (ADC活用) を確立し、認証情報のバイナリ内包を完全に排除。
 
-- [x] **IaC 化 (Terraform)** 🎉 *Done*
-  - GCS/IAM リソースのコード管理。既存リソースの import による構成同期を完遂。
+- [x] **IaC 化 (Terraform)による再現性の確保** 🎉 *Done*
+  - **構成同期（Drift Detection）**: 既存リソースを `terraform import` により管理下へ移行し、コードと実環境の完全な同期を完遂。
+  - **最小権限の原則 (Least Privilege)**: サービスアカウントに対し、実行時（Object Admin）と管理時（Storage Admin）の権限を分離。セキュアな IAM 設計を実証。
+  - **ライフサイクル管理**: `force_destroy` 等の属性定義により、リソースの廃棄・再作成プロセスを宣言的に記述。
 
 🏗 Architecture & Reliability
 
@@ -137,7 +89,7 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
   - `go-arch-lint` により、`Usecase` が `Infra` に依存しない **DIP (依存性逆転の原則)** を静的に強制。設計の腐敗を自動で遮断する仕組みを構築。
 
 - [x] **オブザーバビリティ & 並行処理制御** 🎉 *Done*
-  - `slog` による構造化ログと `errgroup` による **Fail-fast** 制御を実装。分散トレーシングを見据えた `context` 伝播と、リソース浪費の防止を両立。
+  - `slog` による db_id 付き構造化ログと `errgroup` による **Fail-fast** 制御を実装。分散トレーシングを見据えた `context` 伝播を 全レイヤーに適用 し、異常検知時の即座な処理中断（リソース浪費防止）を実現。
 
 ## 🛠 今後の検証ロードマップ
 
@@ -156,13 +108,15 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 ├── internal/           # Business Logic (クリーンアーキテクチャのコア)
 │   ├── handler/        # 外部接続（HTTPリクエストの解析・レスポンス生成）
 │   │   └── file_handler.go
-│   ├── domain/  環境変数（`BUCKET_NAME`等）の外部注入による「ポータブルな実行環境」を実現。       # Entity & Repository Interface (DIPの起点)
+│   ├── domain/         # Entity & Repository Interface (DIPの起点)
 │   │   ├── file.go        # ファイルの実体（Entity）
 │   │   ├── repository.go  # 保存(Repo)と通知(Pipeline)の定義
 │   │   └── metadata.go  # RAG連携用の属性定義
 │   ├── usecase/        # Business Logic (並行処理・制御フロー)
+│   │   ├── file_interactor.go       # 並行アップロードのコアロジック
+│   │   └── file_interactor_test.go  # ロジックの正当性を保証するテスト
 │   └── infra/          # Infrastructure Adapters (技術的詳細の実装)
-│       ├── storage_factory.go  # インフラ切り替えの司令塔
+│       ├── factory.go  # インフラ切り替えの司令塔
 │       ├── gcs/                # GCS 具象実装
 │       |   └── gcs_repository.go
 │       └── repository/    # 永続化層の具象実装
@@ -171,15 +125,19 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 │               └── migrations.go # golang-migrate 実行ロジック
 ├── migrations/         # DB スキーマ管理 (SQLファイル)
 │   ├── 000001_create_files_table.up.sql
-│   └── 000001_create_files_table.down.sql
+│   ├── 000001_create_files_table.down.sql
+│   ├── 000002_add_gin_index_to_tags.up.sql
+│   └── 000002_add_gin_index_to_tags.down.sql
 ├── terraform/          # Infrastructure as Code (GCPリソース定義)
 │   ├── main.tf         # GCSリソース・Provider定義
+│   ├── outputs.tf      # インフラ出力情報の定義
 │   └── variables.tf    # プロジェクトID・バケット名の変数管理
 ├── .github/workflows/  # CI/CD パイプライン (GitHub Actions)
 │   └── docker-build.yml # 自動コンテナビルド定義
 ├── archives/           # 開発初期の実装や試行錯誤の軌跡 (ビルド対象外)
-├── assets.go           # ★ プロジェクト共通資産（SQL等）の embed 定義
+├── assets.go           # プロジェクト共通資産（SQL等）の embed 定義
 ├── Dockerfile          # マルチステージビルドによる軽量実行イメージ定義
+├── .go-arch-lint.yml   # アーキテクチャの依存関係を強制する定義ファイル
 ├── go.mod              # 依存関係管理
 ├── .env                # 環境設定（Git管理対象外）
 ├── README.md           # 本ドキュメント
@@ -215,11 +173,6 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
 ## 🏗 アーキテクチャと依存関係の制御
 ```text
 
-本プロジェクトはクリーンアーキテクチャに基づき、依存方向を外側から内側（Domain）へ一方向に制限しています。
-この制約は `go-arch-lint` によって静的に強制されており、設計意図に反するインポートは CI で遮断されます。
-
-
-
 【依存方向のフロー】
 🌐 External (API/CLI) ──┐
                          ▼
@@ -242,8 +195,4 @@ Cloud SQL (PostgreSQL) を導入し、ストレージへの物理保存と同期
               └───────────────┘
                 2. Implements Domain Interfaces
 
-domain 層を全パッケージの「最小単位」として定義し、すべての外部依存（DB/GCS）をこの抽象に紐付けることで、ビジネスロジックの純粋性を担保しています。これは単なる規約ではなく、go-arch-lint による CI 落ちを伴う制約です。
-
-※ go-arch-lint により、`usecase` が `infra` の具象パッケージを
-  直接インポートすることを禁止し、DIP（依存性逆転の原則）を担保しています。
 ```

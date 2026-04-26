@@ -38,7 +38,7 @@ func main() {
 	// A. まずはマイグレーションを実行
 	// sql.RunMigrations は migrations.go で定義する関数
 	// 🚀 ルートで定義した MigrationFS をインフラ層に注入する
-	if err := sql.RunMigrations(dbURL, file_transfer_api.MigrationFS); err != nil {
+	if err := sql.RunMigrations(ctx, dbURL, file_transfer_api.MigrationFS); err != nil {
 		slog.Error("❌ Migration failed（起動を中止します）", "error", err)
 		os.Exit(1)
 	}
@@ -166,10 +166,12 @@ func main() {
 		fmt.Fprintln(w, "Upload endpoint reached")
 	})
 
-	slog.Info("📡 Starting server", "port", os.Getenv("PORT"))
+	// すでに上で port := os.Getenv("PORT") (or "8080") と定義しているので、
+	// それを使い回すのが安全です。
+	slog.Info("📡 Starting server", "port", port)
 
 	// サーバーを起動（ここでプログラムが終了せずに待機状態になります）
-	if err := http.ListenAndServe(":"+os.Getenv("PORT"), nil); err != nil {
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		slog.Error("サーバー起動失敗", "error", err)
 		os.Exit(1)
 	}
