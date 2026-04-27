@@ -15,15 +15,6 @@
 - **cmd (Main Component)**: 依存注入（DI）と起動のみに特化。アプリケーションを「何として（API/CLI）」動かすかを外部から注入可能にし、コアロジックの再利用性を最大化。
 - **Observability**: `slog` による構造化ログを全層に適用。Middleware による **Trace ID 注入および context 伝播** を実装し、並行処理下でもリクエスト単位のログ追跡（分散トレーシング基盤）を完全に実現。
 
-## 🛠 Quick Start (Local Development)
-
-外部インフラ（GCP）に依存せず、ローカル環境のみで API サーバーを即座に起動し、並行処理の挙動を検証可能です。
-
-```bash
-# 依存関係なし（In-Memory / Local Storage）で起動
-STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
-```
-
 ## ⚡ Go の並行処理モデルの実測検証
 
 同一コンテナ環境（リソース制限下）において、逐次処理と並行処理のスループットを実測比較しました。
@@ -65,7 +56,7 @@ STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
 - **CI/CD**: GitHub Actions による完全自動化（Artifact Registry 連携）
 - **DB Migration**: `golang-migrate` による起動時オートマイグレーション
 
-## 🛠 検証済みロードマップ (Infrastructure & Backend)
+## 🏗 検証済みロードマップ (Infrastructure & Backend)
 
 📂 Database & Persistence Strategy
 
@@ -214,4 +205,13 @@ STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
               └───────────────┘
                 2. Implements Domain Interfaces
 
+```
+
+## 🛠 Quick Start (Local Development)
+
+外部インフラ（GCP）に依存せず、ローカル環境のみで API サーバーを即座に起動し、並行処理の挙動を検証可能です。
+
+```bash
+# 依存関係なし（In-Memory / Local Storage）で起動
+STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
 ```
