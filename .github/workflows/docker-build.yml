@@ -13,6 +13,9 @@ jobs:
     # ✅ v4 から v6 に更新 (Node.js 24 対応)
     - name: Checkout code
       uses: actions/checkout@v6
+      env:
+        # 「デフォルトブランチ名は main です」と、実行の瞬間に Git に直接叩き込む
+        GIT_CONFIG_PARAMETERS: "'init.defaultBranch=main'"
 
     # 💡 Git のデフォルトブランチ警告を抑制
     - name: Configure Git
