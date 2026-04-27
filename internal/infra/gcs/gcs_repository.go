@@ -50,7 +50,6 @@ func (r *GCSRepository) Save(ctx context.Context, objectName string, data io.Rea
 
 	wc := r.client.Bucket(r.bucketName).Object(objectName).NewWriter(ctx)
 
-	// io.Copy を使うことで、メモリに溜め込まずにバケツリレーで転送できます
 	// io.Copy を使うことで、ReaderからGCSのWriterへ効率よくデータを流し込めます
 	if _, err := io.Copy(wc, data); err != nil {
 		slog.ErrorContext(ctx, "GCS copy failed", "object", objectName, "error", err)

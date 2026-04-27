@@ -64,26 +64,38 @@ func main() {
 		// --- [ここ！] DB接続とマイグレーション ---
 		slog.Info("🔌 Connecting to Cloud SQL and Running Migrations...")
 
-		// A.  DBマイグレーションの実行（ルートの埋め込みFSを使用）
-		// sql.RunMigrations は migrations.go で定義する関数
-		// 🚀 ルートで定義した MigrationFS をインフラ層に注入する
-		if err := sql.RunMigrations(ctx, dbURL, file_transfer_api.MigrationFS); err != nil {
-			slog.Error("❌ Migration failed（起動を中止します）", "error", err)
-			os.Exit(1)
+		var sqlRepo *sql.Repository
+		var lastErr error
+
+		// 🚀 リトライロジックをここに配置
+		maxRetries := 5
+		for i := 1; i <= maxRetries; i++ {
+			// A. DBマイグレーションの実行（接続テストも兼ねる）
+			// sql.RunMigrations は migrations.go で定義する関数
+			// 🚀 ルートで定義した MigrationFS をインフラ層に注入する
+			lastErr = sql.RunMigrations(ctx, dbURL, file_transfer_api.MigrationFS)
+			if lastErr == nil {
+				// B. マイグレーション成功ならリポジトリ生成
+				sqlRepo, lastErr = sql.NewRepository(ctx)
+				if lastErr == nil {
+					break // ✨ 両方成功したらループを抜ける
+				}
+			}
+
+			// 失敗時のログ（まだリトライの可能性がある場合）
+			slog.Warn("⚠️ DB not ready. Retrying...", "attempt", i, "max", maxRetries, "error", lastErr)
+			time.Sleep(2 * time.Second) // 2秒待機してリトライ
+
+			// ⚡ 最終リトライでも失敗した場合：ここがかつての「ガード節」の終着点
+			if i == maxRetries {
+				slog.Error("❌ DB接続に最終失敗しました", "error", lastErr)
+				os.Exit(1)
+			}
 		}
 
-		// B. PostgreSQLリポジトリの生成と接続確認
-		sqlRepo, err := sql.NewRepository(ctx)
-
-		// 異常系を先に処理して終わらせる（ガード節）
-		if err != nil {
-			slog.Error("❌ DB接続失敗（起動を中止します）", "error", err)
-			os.Exit(1) // ここで確実に止まる
-		}
-
-		// ここに来るということは、必ず成功している（elseがいらない）
+		// ここに来るということは、必ずリトライのどこかで成功している
 		defer sqlRepo.Close()
-		slog.Info("🎉 Cloud SQL への接続に成功しました！")
+		slog.Info("🎉 Database is ready and migrated!")
 
 		metadataRepo = sqlRepo
 	}

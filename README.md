@@ -66,6 +66,7 @@
   - **クリーンなAPI設計**: HTTP クエリパラメータを Domain 層の抽象型へ変換する **「マルチプロトコル対応」** の玄関口を実装。`limit/offset` によるページネーションバリデーションを全レイヤー（Handler -> Usecase -> Domain -> Infra）で統合。
 
 - [x] **DBマイグレーションの自動化** 🎉 *Done*
+  - **指数バックオフによる接続リトライ**: DBコンテナの起動遅延を許容するリトライ戦略を実装。起動順序に依存しない堅牢なサービス立ち上げを実現。
   - **Single Binary Strategy**: `golang-migrate` と `io/fs`(embed) を活用し、バイナリ内包型の自動マイグレーションを実現。環境差分による不具合を**仕組みで排除**。
 
 ⚙️ CI/CD & Cloud Native
@@ -77,6 +78,7 @@
 - [x] **Cloud Run への自動デプロイ (CD)** 🎉 *Done*
   - **Attack Surface 最小化**: **Distroless** イメージを採用し、実行環境の脆弱性リスクを根本から低減。
   - **Credential Zero**: Artifact Registry 連携と **Workload Identity** による **Keyless 認証** (ADC活用) を確立し、認証情報のバイナリ内包を完全に排除。
+  - **Container-native Base**: `docker-compose` による API+DB のローカル完結型開発環境を構築。
 
 - [x] **IaC 化 (Terraform)による再現性の確保** 🎉 *Done*
   - **構成同期（Drift Detection）**: 既存リソースの状態をコードへ正確に反映。**Drift（環境差分）を完全に解消**し、コードと実環境の完全な同期を完遂。
@@ -86,7 +88,8 @@
 🏗 Architecture & Reliability
 
 - [x] **Architecture Testing (理論駆動の実証)** 🎉 *Done*
-  - `go-arch-lint` により、`Usecase` が `Infra` に依存しない **DIP (依存性逆転の原則)** を静的に強制。設計の腐敗を自動で遮断する仕組みを構築。
+  - **静的解析の強制**: `go-arch-lint` により、`Usecase` が `Infra` に依存しない **DIP (依存性逆転の原則)** を静的に強制。設計の腐敗を自動で遮断する仕組みを構築。
+  - **品質管理の自動化**: `golangci-lint (v2)` を導入。`errcheck` や `staticcheck` 等により商用レベルのコード品質を担保。
 
 - [x] **オブザーバビリティ & 並行処理制御 (Distributed Tracing)** 🎉 *Done*
   - **Trace ID 伝播**: HTTP Middleware で生成した Trace ID を `context` 経由で Usecase/Infra 層へ伝播。`slog.Handler` を拡張し、全ログ行への `trace_id` 自動刻印を完遂。
@@ -146,8 +149,10 @@
 │   └── docker-build.yml # 自動コンテナビルド定義
 ├── archives/           # 開発初期の実装や試行錯誤の軌跡 (ビルド対象外)
 ├── assets.go           # プロジェクト共通資産（SQL等）の embed 定義
+├── docker-compose.yml  # DB・APIの疎結合な依存関係とネットワークを定義
 ├── Dockerfile          # マルチステージビルドによる軽量実行イメージ定義
 ├── .go-arch-lint.yml   # アーキテクチャの依存関係を強制する定義ファイル
+├── .golangci.yml       # 商用グレードの静的解析ルール定義
 ├── go.mod              # 依存関係管理
 ├── .env                # 環境設定（Git管理対象外）
 ├── README.md           # 本ドキュメント
@@ -209,9 +214,21 @@
 
 ## 🛠 Quick Start (Local Development)
 
-外部インフラ（GCP）に依存せず、ローカル環境のみで API サーバーを即座に起動し、並行処理の挙動を検証可能です。
+外部インフラ（GCP）に依存せず、Docker Compose を用いて「API + DB + 擬似ストレージ」の全環境を即座にローカルで再現可能です。
 
 ```bash
-# 依存関係なし（In-Memory / Local Storage）で起動
+### 🐳 A. Docker Compose (Recommended)
+# DBリトライ・オートマイグレーションを含めたフル環境を起動
+docker compose up --build
+
+### 💻 B. Go Run (Lightweight Mode)
+# 外部インフラに依存せず、インメモリDBとローカルストレージで起動
 STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
+
+### ✅ 動作確認（ヘルスチェック）
+curl http://localhost:8080/health
+
+```
+```text
+**Note**: DB起動待ちのリトライアルゴリズムを実装済みのため、サービスは自動で正常な状態に収束します。
 ```

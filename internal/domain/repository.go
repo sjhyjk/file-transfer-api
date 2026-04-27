@@ -9,8 +9,8 @@ import (
 // domain層に置くことで、全ての層から参照可能になります
 type FileRepository interface {
 	Save(ctx context.Context, name string, data io.Reader) error
-	Delete(ctx context.Context, name string) error // 👈 これを追加
-	Close() error                                  // これで main.go の defer が動くようになる
+	Delete(ctx context.Context, name string) error
+	Close() error // これで main.go の defer が動くようになる
 
 	// 今後の深化：ビジネスルールに基づくバッチ処理やリトライの抽象化
 	// FindAllByStatus(ctx context.Context, status TransferStatus) ([]*File, error)
@@ -42,7 +42,6 @@ type MetadataRepository interface {
 	// SaveMetadata は新規レコードをDBに保存し、生成されたIDと作成日時を構造体に反映します。
 	SaveMetadata(ctx context.Context, metadata *FileMetadata) error
 	// FindAll はページネーション付きでメタデータ一覧を取得します
-	// 👈 ここを修正：引数を FileSearchQuery に変更
 	// これにより、Usecase層は「何を検索するか」だけを伝え、
 	// 「どうSQLを書くか」はInfra層が責任を持つという分離が明確になります。
 	FindAll(ctx context.Context, query FileSearchQuery) ([]*FileMetadata, error)

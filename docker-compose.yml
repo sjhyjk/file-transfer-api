@@ -1,0 +1,42 @@
+services:
+  # --- API Server (Go) ---
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DB_TYPE=SQL
+      # 💡 ポイント1: ホスト名を localhost ではなく、サービス名の 'db' に指定
+      - DATABASE_URL=postgres://app_user:app_pass@db:5432/transfer_metadata?sslmode=disable
+      - STORAGE_TYPE=LOCAL
+      - LOCAL_STORAGE_PATH=/app/storage
+    volumes:
+      - ./storage:/app/storage # 💡 ポイント2: ローカル保存ファイルの永続化
+    depends_on:
+      db:
+        condition: service_healthy # 💡 ポイント3: DBが完全に立ち上がってから起動
+
+  # --- Database (PostgreSQL) ---
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=app_user
+      - POSTGRES_PASSWORD=app_pass
+      - POSTGRES_DB=transfer_metadata
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # 💡 ポイント4: マネフォ基準の「接続可能性」チェック
+      test: ["CMD-SHELL", "pg_isready -U app_user -d transfer_metadata"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data: # DBの中身を消さないためのボリューム
+  
