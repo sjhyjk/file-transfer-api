@@ -13,7 +13,7 @@
 - **Usecase**: ビジネスロジックの純粋性を維持。`infra` 層の具象実装を一切参照せず、`domain` のインターフェースのみを介して並行アップロードや通知を制御。
 - **Infrastructure (Factory Pattern)**: `STORAGE_TYPE` 等の環境変数に基づき、GCS/Local Storage/S3（予定）、Cloud SQL/In-Memory DB を動的に切り替える **Plug-and-Play** な構成を採用。
 - **cmd (Main Component)**: 依存注入（DI）と起動のみに特化。アプリケーションを「何として（API/CLI）」動かすかを外部から注入可能にし、コアロジックの再利用性を最大化。
-- **Observability**: `slog` による構造化ログを全層に適用。`db_id` 等のコンテキストを伝播させ、分散トレーシングを見据えた「運用の透明性」を確保。
+- **Observability**: `slog` による構造化ログを全層に適用。Middleware による **Trace ID 注入および context 伝播** を実装し、並行処理下でもリクエスト単位のログ追跡（分散トレーシング基盤）を完全に実現。
 
 ## 🛠 Quick Start (Local Development)
 
@@ -97,8 +97,9 @@ STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
 - [x] **Architecture Testing (理論駆動の実証)** 🎉 *Done*
   - `go-arch-lint` により、`Usecase` が `Infra` に依存しない **DIP (依存性逆転の原則)** を静的に強制。設計の腐敗を自動で遮断する仕組みを構築。
 
-- [x] **オブザーバビリティ & 並行処理制御** 🎉 *Done*
-  - `slog` による db_id 付き構造化ログと `errgroup` による **Fail-fast** 制御を実装。単体テストにおいて、並行処理中の一部エラーが全体へ即座に波及・中断される挙動を検証済み。分散トレーシングを見据えた `context` 伝播を 全レイヤーに適用 し、異常検知時の即座な処理中断（リソース浪費防止）を実現。
+- [x] **オブザーバビリティ & 並行処理制御 (Distributed Tracing)** 🎉 *Done*
+  - **Trace ID 伝播**: HTTP Middleware で生成した Trace ID を `context` 経由で Usecase/Infra 層へ伝播。`slog.Handler` を拡張し、全ログ行への `trace_id` 自動刻印を完遂。
+  - **並行処理の Fail-fast**: `errgroup` を用いた異常検知時の即座な処理中断を実装。ユニットテストにて、一部の失敗が全体に波及し安全に停止する挙動を実証済み。
 
 ## 🛠 今後の検証ロードマップ
 
@@ -113,10 +114,11 @@ STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
 .
 ├── cmd/                # Entry Point (実行環境の決定・DI・起動)
 │   └── api/
-│       └── main.go     # DIを行い、Usecaseを起動
+│       └── main.go     # システム基盤（slog拡張・DI）の構築とサーバー起動
 ├── internal/           # Business Logic (クリーンアーキテクチャのコア)
 │   ├── handler/        # 外部接続（HTTPリクエストの解析・レスポンス生成）
-│   │   └── file_handler.go
+│   │   ├── file_handler.go
+│   │   └── middleware.go  # Trace ID注入等の共通前処理
 │   ├── domain/         # Entity & Repository Interface (DIPの起点)
 │   │   ├── file.go        # ファイルの実体（Entity）
 │   │   ├── repository.go  # 保存(Repo)と通知(Pipeline)の定義
@@ -124,18 +126,22 @@ STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
 │   ├── usecase/        # Business Logic (並行処理・制御フロー)
 │   │   ├── file_interactor.go       # 並行アップロードのコアロジック
 │   │   └── file_interactor_test.go  # ロジックの正当性を保証するテスト
-│   └── infra/          # Infrastructure Adapters (技術的詳細の実装)
-│       ├── factory.go  # インフラ切り替えの司令塔
-│       ├── gcs/                # GCS 具象実装
-│       |   └── gcs_repository.go
-│       ├── local/         # ローカルファイルシステム実装
-│       |   └── local_repository.go
-│       └── repository/    # 永続化層の具象実装
-│           ├── inmemory/  # 高速な検証を可能にするインメモリDB実装
-│           │   └── memory_repository.go
-│           └── sql/       # Cloud SQL (PostgreSQL) 永続化・マイグレーション
-│               ├── db.go         # コネクション・CRUD実装
-│               └── migrations.go # golang-migrate 実行ロジック
+│   ├── infra/          # Infrastructure Adapters (技術的詳細の実装)
+│   │   ├── factory.go  # インフラ切り替えの司令塔
+│   │   ├── gcs/                # GCS 具象実装
+│   │   |   └── gcs_repository.go
+│   │   ├── local/         # ローカルファイルシステム実装
+│   │   |   └── local_repository.go
+│   │   └── repository/    # 永続化層の具象実装
+│   │       ├── inmemory/  # 高速な検証を可能にするインメモリDB実装
+│   │       │   └── memory_repository.go
+│   │       └── sql/       # Cloud SQL (PostgreSQL) 永続化・マイグレーション
+│   │           ├── db.go         # コネクション・CRUD実装
+│   │           └── migrations.go # golang-migrate 実行ロジック
+│   └── pkg/            # ユーティリティ・基盤共通パッケージ
+│       └── requestid/  # Trace IDの生成・context伝播・slog拡張実装
+│           ├── handler.go
+│           └── requestid.go
 ├── migrations/         # DB スキーマ管理 (SQLファイル)
 │   ├── 000001_create_files_table.up.sql
 │   ├── 000001_create_files_table.down.sql

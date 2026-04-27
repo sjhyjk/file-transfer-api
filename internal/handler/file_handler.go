@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"file-transfer-api/internal/pkg/requestid"
 	"file-transfer-api/internal/usecase"
 	"log/slog"
 	"net/http"
@@ -18,22 +19,25 @@ func NewFileHandler(interactor *usecase.FileInteractor) *FileHandler {
 
 // HandleListFiles は GET /files エエンドポイントを処理します
 func (h *FileHandler) HandleListFiles(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	// 🚀 1. Trace ID を生成して context に注入
+	// クライアントから X-Trace-Id ヘッダーがあればそれを使う、なければ新規発行する実装がプロっぽいです
+	traceID := r.Header.Get("X-Trace-Id")
+	ctx := requestid.WithTraceID(r.Context(), traceID)
 
-	// 🚀 1. 開始ログ：どんな条件でリクエストが来たか記録
+	// 🚀 2. 開始ログ（以降、ctx を使用する）
 	slog.InfoContext(ctx, "Handling list files request",
 		"method", r.Method,
 		"path", r.URL.Path,
 		"tags", r.URL.Query()["tags"],
 	)
 
-	// 2. メソッドバリデーション
+	// 3. メソッドバリデーション
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// 3. クエリパラメータの解析（ページネーション & 検索タグ）
+	// 4. クエリパラメータの解析（ページネーション & 検索タグ）
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 
@@ -42,10 +46,10 @@ func (h *FileHandler) HandleListFiles(w http.ResponseWriter, r *http.Request) {
 	tags := r.URL.Query()["tags"]
 	// ※ tags := r.URL.Query().Get("tags") ではなく []string で取得できるこの書き方が便利です
 
-	// 4. Usecase の呼び出し（tags を追加）
+	// 🚀 5. Usecase の呼び出し（注入した ID 入りの ctx を渡す）
 	files, err := h.interactor.FetchMetadataList(ctx, tags, limit, offset)
 	if err != nil {
-		// 🚀 5. エラーログ：何が原因で失敗したか属性付きで記録
+		// 🚀 6. エラーログ：何が原因で失敗したか属性付きで記録
 		slog.ErrorContext(ctx, "Failed to fetch metadata list",
 			"error", err,
 			"tags", tags,
@@ -54,7 +58,7 @@ func (h *FileHandler) HandleListFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 6. レスポンスの返却
+	// 7. レスポンスの返却
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(files); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)

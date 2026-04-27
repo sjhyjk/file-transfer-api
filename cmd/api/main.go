@@ -15,6 +15,7 @@ import (
 	"file-transfer-api/internal/handler"
 	"file-transfer-api/internal/infra"
 	"file-transfer-api/internal/infra/repository/sql"
+	"file-transfer-api/internal/pkg/requestid"
 	"file-transfer-api/internal/usecase"
 )
 
@@ -25,8 +26,11 @@ func main() {
 	// [1] システム基盤の準備
 	// ---------------------------------------------------------
 
+	// 🚀 修正：独自の TraceHandler を噛ませる
+	baseHandler := slog.NewJSONHandler(os.Stdout, nil)
+	traceHandler := &requestid.TraceHandler{Handler: baseHandler}
 	// ログ出力を構造化（JSON）し、標準ロガーとして設定
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(traceHandler)
 	slog.SetDefault(logger)
 
 	// 外部環境（Cloud Runやローカル環境変数）から設定を取得
@@ -189,7 +193,8 @@ func main() {
 
 	// メタデータ一覧取得エンドポイント
 	// これにより GET /files?limit=20&offset=0 が有効になります
-	http.HandleFunc("/files", fileHandler.HandleListFiles)
+	// HandleFunc の登録は main 関数の中に入れます
+	http.HandleFunc("/files", handler.TraceMiddleware(fileHandler.HandleListFiles))
 
 	// アップロード用のエンドポイント（将来的にここへ POST する）
 	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
