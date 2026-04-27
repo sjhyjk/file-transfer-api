@@ -10,11 +10,17 @@ jobs:
     runs-on: ubuntu-latest # GitHub側のマシンで実行されるので、自分のPCは重くならない
 
     steps:
+    # ✅ v4 から v6 に更新 (Node.js 24 対応)
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
+    # 💡 Git のデフォルトブランチ警告を抑制
+    - name: Configure Git
+      run: git config --global init.defaultBranch main
+
+    # ✅ v5 から v6 に更新 (Node.js 24 対応)
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: '1.25' # 1.24 から 1.25 へ。これでツールチェーンの自動DLをスキップできます
         cache: true        # 依存関係のキャッシュを有効化して、さらに高速化
