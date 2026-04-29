@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest # GitHub側のマシンで実行されるので、自分のPCは重くならない
+    permissions:
+      contents: 'read'
+      id-token: 'write'
 
     steps:
     # ✅ v4 から v6 に更新 (Node.js 24 対応)
@@ -89,8 +92,10 @@ jobs:
       uses: 'google-github-actions/auth@v2'
       with:
         # JSONキーを使わず、IDプールを指定する「Keyless」な記述
-        # workload_identity_provider: '${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}'
-        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+        # Terraformで作成したProviderのフルパスを指定
+        # projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
+        workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+        service_account: 'file-transfer-app-runtime@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
 
     # ✅ ステップ6: クラウド環境・Docker 認証
     - name: 'Set up Cloud SDK'

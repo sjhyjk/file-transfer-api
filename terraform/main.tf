@@ -13,7 +13,6 @@ terraform {
 provider "google" {
   project = var.project_id # variables.tf で定義する変数
   region  = "us-west1"
-  credentials = file("../gcp-key.json") # .env の GCP_KEY_FILE と合わせる
 }
 
 # --- Storage (GCS) ---
@@ -71,7 +70,7 @@ resource "google_storage_bucket_iam_member" "rag_bucket_viewer" {
   role   = "roles/storage.objectViewer" # 読み取りのみ
   member = "serviceAccount:${google_service_account.app_runtime_sa.email}"
 }
-
+/*
 # 4. Cloud SQL への接続権限 (Cloud SQL クライアント)
 resource "google_project_iam_member" "sql_client" {
   project = var.project_id
@@ -121,4 +120,47 @@ resource "google_sql_user" "db_user" {
   name     = "app_user"
   instance = google_sql_database_instance.postgres.name
   password = var.db_password # variables.tf で定義が必要
+}
+*/
+# ==========================================
+# Workload Identity 設定 (GitHub Actions 用)
+# ==========================================
+
+# 1. Workload Identity Pool の作成
+resource "google_iam_workload_identity_pool" "github_pool" {
+  workload_identity_pool_id = "github-actions-pool"
+  display_name              = "GitHub Actions Pool"
+  description               = "Identity pool for GitHub Actions"
+}
+
+# 2. Workload Identity Provider の作成
+resource "google_iam_workload_identity_pool_provider" "github_provider" {
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
+  workload_identity_pool_provider_id = "github-provider"
+  display_name                       = "GitHub Actions Provider"
+
+  attribute_mapping = {
+    "google.subject"       = "assertion.sub"
+    "attribute.repository" = "assertion.repository"
+    "attribute.owner"      = "assertion.repository_owner"
+    "attribute.refs"       = "assertion.ref"
+    "attribute.actor"            = "assertion.actor"
+    "attribute.aud"              = "assertion.aud"
+  }
+  
+  # ここを追加：特定のリポジトリ（永田さんのリポジトリ）以外からのアクセスを入り口で弾く設定
+  # これにより、GCP側が求める「Claimsの参照」を完全に満たします。
+  attribute_condition = "assertion.repository == 'sjhyjk/file-transfer-api'"
+
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+}
+
+# 3. サービスアカウントに GitHub Actions からの「なりすわり」権限を付与
+# ※既存の google_service_account.app_runtime_sa を利用します
+resource "google_service_account_iam_member" "workload_identity_user" {
+  service_account_id = google_service_account.app_runtime_sa.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/sjhyjk/file-transfer-api"
 }

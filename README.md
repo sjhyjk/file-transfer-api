@@ -151,10 +151,10 @@
 ├── assets.go           # プロジェクト共通資産（SQL等）の embed 定義
 ├── docker-compose.yml  # DB・APIの疎結合な依存関係とネットワークを定義
 ├── Dockerfile          # マルチステージビルドによる軽量実行イメージ定義
+├── .env                # 環境設定（Git管理対象外）
 ├── .go-arch-lint.yml   # アーキテクチャの依存関係を強制する定義ファイル
 ├── .golangci.yml       # 商用グレードの静的解析ルール定義
 ├── go.mod              # 依存関係管理
-├── .env                # 環境設定（Git管理対象外）
 ├── README.md           # 本ドキュメント
 │
 ├── python_comparison/  # [In Progress] Python (AsyncIO) との性能比較検証用
