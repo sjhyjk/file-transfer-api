@@ -133,9 +133,6 @@ func main() {
 	// これにより、usecase側には「実体(infra)が何か」を隠したまま「機能(interface)」だけを渡せます
 	interactor := usecase.NewFileInteractor(fileRepo, metadataRepo, nil)
 
-	// ハンドラー（HTTPインターフェース）の初期化
-	fileHandler := handler.NewFileHandler(interactor)
-
 	// ---------------------------------------------------------
 	// [4] 動作検証（ベンチマーク計測）
 	// ---------------------------------------------------------
@@ -198,11 +195,10 @@ func main() {
 	// 🚀 永田さんの Middleware を Echo 用にラップして登録
 	// (後述の Adaptor を使うか、Echo 用に書き換えたものを使用)
 	e.Use(echo.WrapMiddleware(appmiddleware.TraceMiddleware))
-	e.Use(middleware.Logger())  // Echo標準のログ
 	e.Use(middleware.Recover()) // パニック時に落ちないように
 
 	// ハンドラーの初期化
-	fileHandler = handler.NewFileHandler(interactor)
+	fileHandler := handler.NewFileHandler(interactor)
 
 	// 🚀 自動生成されたハンドラーを一括登録！
 	// これにより YAML で定義した /files, /upload 等が紐付きます

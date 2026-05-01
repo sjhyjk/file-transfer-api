@@ -97,7 +97,13 @@ func (h *FileHandler) UploadFile(ctx echo.Context) error {
 	if err != nil {
 		return ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to open file"})
 	}
-	defer src.Close()
+
+	// 🚀 修正：defer で Close のエラーを適切にハンドルする
+	defer func() {
+		if closeErr := src.Close(); closeErr != nil {
+			slog.WarnContext(rCtx, "Failed to close uploaded file", "error", closeErr)
+		}
+	}()
 
 	// 4. Domainモデルへの変換
 	// interactor が期待する domain.File 型を作る
