@@ -13,22 +13,34 @@ import (
 
 	"file-transfer-api/internal/domain"
 	"file-transfer-api/internal/handler"
+	"file-transfer-api/internal/handler/appmiddleware"
 	"file-transfer-api/internal/infra"
-	"file-transfer-api/internal/infra/repository/sql"
-	"file-transfer-api/internal/pkg/requestid"
+	"file-transfer-api/internal/infra/sql"
+	"file-transfer-api/internal/pkg/logger"
 	"file-transfer-api/internal/usecase"
+
+	"github.com/joho/godotenv"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
+	// 🚀 .env ファイルを読み込む（コメントや空行があっても賢く無視してくれます）
+	if err := godotenv.Load(); err != nil {
+		// .envがなくても環境変数があれば動くよう、ログ出力に留めるのが一般的
+		slog.Info(".env file not found, using system environment variables")
+	}
+
 	ctx := context.Background()
 
 	// ---------------------------------------------------------
 	// [1] システム基盤の準備
 	// ---------------------------------------------------------
 
+	// --- [1] 基盤準備（ログ・設定） ---
 	// 🚀 修正：独自の TraceHandler を噛ませる
 	baseHandler := slog.NewJSONHandler(os.Stdout, nil)
-	traceHandler := &requestid.TraceHandler{Handler: baseHandler}
+	traceHandler := &logger.TraceHandler{Handler: baseHandler}
 	// ログ出力を構造化（JSON）し、標準ロガーとして設定
 	logger := slog.New(traceHandler)
 	slog.SetDefault(logger)
@@ -104,20 +116,19 @@ func main() {
 	// --- [ストレージ層の初期化] ---
 	// Factoryを使用して環境に応じたリポジトリ（GCS or LOCAL）を生成
 	repo, err := infra.NewStorageRepository(ctx)
-	var initError error
 	if err != nil {
 		slog.Error("⚠️ ストレージリポジトリの初期化に失敗", "error", err)
-		initError = err // エラーを保持しておく
-	} else {
-		fileRepo = repo
-		// storage側もCloseが必要なインターフェースならここでdefer
-		// defer fileRepo.Close()
+		os.Exit(1) // 🚀 ここで止める！
 	}
+	fileRepo = repo
+	// storage側もCloseが必要なインターフェースならここでdefer
+	// defer fileRepo.Close()
 
 	// ---------------------------------------------------------
 	// [3] アプリケーション層（ドメインロジック）の構築
 	// ---------------------------------------------------------
 
+	// --- [3] ベンチマーク計測 (起動時に1回実行) ---
 	// 3. ユースケースの初期化（具体的な実装をインターフェースに注入）
 	// これにより、usecase側には「実体(infra)が何か」を隠したまま「機能(interface)」だけを渡せます
 	interactor := usecase.NewFileInteractor(fileRepo, metadataRepo, nil)
@@ -181,45 +192,44 @@ func main() {
 	// 🚀 [5] Cloud Run / API サーバー用設定
 	// =========================================================
 
+	// --- [4] Echo サーバーの構築 ---
+	e := echo.New()
+
+	// 🚀 永田さんの Middleware を Echo 用にラップして登録
+	// (後述の Adaptor を使うか、Echo 用に書き換えたものを使用)
+	e.Use(echo.WrapMiddleware(appmiddleware.TraceMiddleware))
+	e.Use(middleware.Logger())  // Echo標準のログ
+	e.Use(middleware.Recover()) // パニック時に落ちないように
+
+	// ハンドラーの初期化
+	fileHandler = handler.NewFileHandler(interactor)
+
+	// 🚀 自動生成されたハンドラーを一括登録！
+	// これにより YAML で定義した /files, /upload 等が紐付きます
+	handler.RegisterHandlers(e, fileHandler)
+
+	// 🚀 個別のヘルスチェック (OpenAPI外の自由なルート)
+	e.GET("/health-check", func(c echo.Context) error {
+		dbStatus := "OK"
+		if metadataRepo == nil {
+			dbStatus = "NG"
+		}
+		return c.String(http.StatusOK, fmt.Sprintf("✅ Running! DB: %s, Gain: %.2f%%", dbStatus, improvement))
+	})
+
+	// --- [5] 起動 ---
 	// Cloud Run は環境変数 "PORT" を指定してくるため、それを取得
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080" // ローカル実行時のデフォルト
 	}
 
-	// ヘルスチェック用のエンドポイント（Cloud Run の起動確認に必要）
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if initError != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "❌ Initialization Error: %v\n", initError)
-			fmt.Fprintf(w, "Check Cloud Run Env Vars (STORAGE_TYPE etc.)")
-			return
-		}
-		// DB接続状況もヘルスチェックに含めると「基盤」っぽくなります
-		dbStatus := "OK"
-		if metadataRepo == nil {
-			dbStatus = "NG"
-		}
-		fmt.Fprintf(w, "✅ Running! DB Status: %s, Gain: %.2f%%", dbStatus, improvement)
-	})
-
-	// メタデータ一覧取得エンドポイント
-	// これにより GET /files?limit=20&offset=0 が有効になります
-	// HandleFunc の登録は main 関数の中に入れます
-	http.HandleFunc("/files", handler.TraceMiddleware(fileHandler.HandleListFiles))
-
-	// アップロード用のエンドポイント（将来的にここへ POST する）
-	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
-		// ここに interactor.UploadMultipleParallel を呼ぶロジックを移譲予定
-		fmt.Fprintln(w, "Upload endpoint reached")
-	})
-
 	// すでに上で port := os.Getenv("PORT") (or "8080") と定義しているので、
 	// それを使い回すのが安全です。
 	slog.Info("📡 Starting server", "port", port)
 
-	// サーバーを起動（ここでプログラムが終了せずに待機状態になります）
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	// 🚀 Echo スタイルの起動方法（こちらを推奨）
+	if err := e.Start(":" + port); err != nil {
 		slog.Error("サーバー起動失敗", "error", err)
 		os.Exit(1)
 	}

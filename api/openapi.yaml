@@ -1,0 +1,111 @@
+openapi: 3.0.3
+info:
+  title: Parallel File Transfer API
+  version: 1.0.0
+  description: クリーンアーキテクチャに基づいた並列ファイル転送API
+
+paths:
+  /upload:
+    post:
+      summary: ファイルをアップロードし、メタデータを登録する
+      operationId: uploadFile 
+      tags:
+        - file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: アップロードするファイル本体
+                tenant_id:
+                  type: string
+                  description: ビジネスオーナー識別子（将来のDB分離用）
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: 検索用タグ
+      responses:
+        '201':
+          description: アップロード成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          description: バリデーションエラー
+  
+  /files:
+    get:
+      summary: メタデータの一覧を取得する
+      operationId: listFiles # これが Go のメソッド名になります
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: tags
+          in: query
+          description: 検索用タグ（複数指定可能）
+          required: false
+          explode: true # ?tags=a&tags=b の形式を許可
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileMetadata'
+
+  /health:
+    get:
+      summary: システムの稼働状況と起動時パフォーマンスを返す
+      responses:
+        '200':
+         content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string }
+                db_connected: { type: boolean }
+                startup_performance_gain: { type: string }
+
+components:
+  schemas:
+    UploadResponse:
+      type: object
+      properties:
+        file_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: "success"
+        gcs_url:
+          type: string
+
+    FileMetadata: # 🚀 domain.File に近い定義を追加
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        size: { type: integer }
+        tags: { type: array, items: { type: string } }

@@ -152,7 +152,7 @@ func (r *Repository) FindAll(ctx context.Context, q domain.FileSearchQuery) ([]*
 	}
 	defer rows.Close()
 
-	var results []*domain.FileMetadata
+	results := []*domain.FileMetadata{}
 	for rows.Next() {
 		m := &domain.FileMetadata{}
 		err := rows.Scan(

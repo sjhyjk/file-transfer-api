@@ -7,7 +7,6 @@ import (
 	"log/slog"
 
 	"cloud.google.com/go/storage"
-	"google.golang.org/api/option"
 )
 
 // GCSRepository はGCS操作の実体を持つ構造体です
@@ -17,17 +16,10 @@ type GCSRepository struct {
 }
 
 // NewGCSRepository は初期化関数です（main.goなどで呼び出します）
-func NewGCSRepository(ctx context.Context, bucketName, keyFile string) (*GCSRepository, error) {
-	var opts []option.ClientOption
+func NewGCSRepository(ctx context.Context, bucketName string) (*GCSRepository, error) {
 
-	// keyFile が指定されている（ローカル環境など）場合のみファイルを使う
-	if keyFile != "" {
-		opts = append(opts, option.WithCredentialsFile(keyFile))
-	}
-	// keyFile が空の場合、storage.NewClient は自動的に環境（Cloud Runなど）の認証情報を使います
-
-	// 2. opts... （三点リーダー）を使ってスライスを展開して渡す
-	client, err := storage.NewClient(ctx, opts...)
+	// 🚀 修正：opts はもう不要。そのまま NewClient を呼ぶ
+	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("GCSクライアントの作成に失敗: %w", err)
 	}

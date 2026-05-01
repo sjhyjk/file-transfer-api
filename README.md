@@ -6,14 +6,15 @@
 
 ## 🚀 実装の柱
 
-### 🏛️ クリーンアーキテクチャによる疎結合設計
-依存性の逆転（DIP）を徹底し、ビジネスロジックを特定の実行環境やインフラから分離。さらに `go-arch-lint` を用いた **Architecture Testing** 導入することで、設計の腐敗を静的に遮断し、長期的な保守性とポータビリティを担保しています。
+### 🏛️ スキーマ駆動開発 & クリーンアーキテクチャによる疎結合設計
+`api/openapi.yaml` を **Single Source of Truth (SSOT)** と定義し、`oapi-codegen` による型安全なコード生成を導入。設計（Schema）が実装（Code）を規定する「理論駆動」の開発プロセスを確立しています。依存性の逆転（DIP）を徹底し、ビジネスロジックを特定の実行環境やインフラから分離。さらに `go-arch-lint` を用いた **Architecture Testing** により、設計の腐敗を静的に遮断しています。
 
+- **API Layer (Echo)**: `Echo` フレームワークを採用し、自動生成されたインターフェースを実装。ミドルウェア（appmiddleware）による **OIDC (OpenID Connect)** 認証と **Trace ID 注入** を統合し、入り口でのガバナンスを徹底。
 - **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、外部（Repository/Pipeline）との契約となるインターフェースを配置。全レイヤーの依存が向かう「不動の頂点」として定義。
-- **Usecase**: ビジネスロジックの純粋性を維持。`infra` 層の具象実装を一切参照せず、`domain` のインターフェースのみを介して並行アップロードや通知を制御。
+- **Usecase**: `errgroup` を活用した **Fail-fast な並行処理制御** を実装。。`infra` 層の具象実装を一切参照せず、純粋なビジネスロジック（並行アップロードのオーケストレーション等）に特化。
 - **Infrastructure (Factory Pattern)**: `STORAGE_TYPE` 等の環境変数に基づき、GCS/Local Storage/S3（予定）、Cloud SQL/In-Memory DB を動的に切り替える **Plug-and-Play** な構成を採用。
 - **cmd (Main Component)**: 依存注入（DI）と起動のみに特化。アプリケーションを「何として（API/CLI）」動かすかを外部から注入可能にし、コアロジックの再利用性を最大化。
-- **Observability**: `slog` による構造化ログを全層に適用。Middleware による **Trace ID 注入および context 伝播** を実装し、並行処理下でもリクエスト単位のログ追跡（分散トレーシング基盤）を完全に実現。
+- **Observability**: `slog` を拡張し、`context` 経由で全層に Trace ID を伝播。並行処理下でもリクエスト単位のログ追跡を完全に実現。
 
 ## ⚡ Go の並行処理モデルの実測検証
 
@@ -58,15 +59,22 @@
 
 ## 🏗 検証済みロードマップ (Infrastructure & Backend)
 
+📂 Schema-First & API Governance
+
+- [x] **OpenAPI 3.0 によるスキーマ駆動開発 (SSOT)** 🎉 Done
+  - **Single Source of Truth**: `api/openapi.yaml` を唯一の正解とし、`oapi-codegen` を用いて型安全な Go コード（Server Interface / Types / Spec）を自動生成。仕様と実装の乖離を構造的に排除。
+  - **Echo フレームワーク移行**: 柔軟なルーティングとミドルウェア管理を実現するため `Echo` を採用。自動生成コードとの統合により、ボイラープレートを最小化。
+  - **バリデーションの統合**: リクエストボディやクエリパラメータのバリデーションを、スキーマ定義から自動で適用。不正なリクエストをハンドラ到達前に遮断。
+
 📂 Database & Persistence Strategy
 
 - [x] **DB 永続化とトランザクション整合性の管理** 🎉 *Done*
   - **高度な検索実装**: **Specification Pattern** を導入。PostgreSQL の**配列演算子・GINインデックス**による動的かつ高速なフィルタリングを実現。プレースホルダによる動的クエリ構築により、SQLインジェクションを完全に排除。
   - **整合性担保**: **補償トランザクション**を実装し、DB保存失敗時の GCS ロールバックを自動化。`pgxpool` と Unix ドメインソケットを用いたセキュアな接続基盤を構築。
-  - **クリーンなAPI設計**: HTTP クエリパラメータを Domain 層の抽象型へ変換する **「マルチプロトコル対応」** の玄関口を実装。`limit/offset` によるページネーションバリデーションを全レイヤー（Handler -> Usecase -> Domain -> Infra）で統合。
+  - **クリーンなAPI設計**: HTTP クエリパラメータを Domain 層の抽象型へ変換する **「マルチプロトコル対応」** の玄関口を実装。`limit/offset` によるページネーションバリデーションを全レイヤーで統合。
 
 - [x] **DBマイグレーションの自動化** 🎉 *Done*
-  - **指数バックオフによる接続リトライ**: DBコンテナの起動遅延を許容するリトライ戦略を実装。起動順序に依存しない堅牢なサービス立ち上げを実現。
+  - **指数バックオフによる接続リトライ**: DBコンテナの起動遅延を許容するリトライ戦略を実装。
   - **Single Binary Strategy**: `golang-migrate` と `io/fs`(embed) を活用し、バイナリ内包型の自動マイグレーションを実現。環境差分による不具合を**仕組みで排除**。
 
 ⚙️ CI/CD & Cloud Native
@@ -77,7 +85,7 @@
 
 - [x] **Cloud Run への自動デプロイ (CD)** 🎉 *Done*
   - **Attack Surface 最小化**: **Distroless** イメージを採用し、実行環境の脆弱性リスクを根本から低減。
-  - **Credential Zero**: Artifact Registry 連携と **Workload Identity** による **Keyless 認証** (ADC活用) を確立し、認証情報のバイナリ内包を完全に排除。
+  - **Credential Zero (OIDC)**: Artifact Registry 連携と **Workload Identity** による **Keyless 認証 (OIDC)** を確立。サービスアカウントキーの管理を完全に廃止し、認証情報のバイナリ内包を完全に排除。
   - **Container-native Base**: `docker-compose` による API+DB のローカル完結型開発環境を構築。
 
 - [x] **IaC 化 (Terraform)による再現性の確保** 🎉 *Done*
@@ -88,12 +96,12 @@
 🏗 Architecture & Reliability
 
 - [x] **Architecture Testing (理論駆動の実証)** 🎉 *Done*
-  - **静的解析の強制**: `go-arch-lint` により、`Usecase` が `Infra` に依存しない **DIP (依存性逆転の原則)** を静的に強制。設計の腐敗を自動で遮断する仕組みを構築。
-  - **品質管理の自動化**: `golangci-lint (v2)` を導入。`errcheck` や `staticcheck` 等により商用レベルのコード品質を担保。
+  - **静的解析の強制**: `go-arch-lint` により **DIP (依存性逆転の原則)** を静的に強制。設計の腐敗を自動で遮断する仕組みを構築。
+  - **品質管理の自動化**: `golangci-lint` を導入。`errcheck` や `staticcheck` 等により商用レベルのコード品質を担保。
 
 - [x] **オブザーバビリティ & 並行処理制御 (Distributed Tracing)** 🎉 *Done*
-  - **Trace ID 伝播**: HTTP Middleware で生成した Trace ID を `context` 経由で Usecase/Infra 層へ伝播。`slog.Handler` を拡張し、全ログ行への `trace_id` 自動刻印を完遂。
-  - **並行処理の Fail-fast**: `errgroup` を用いた異常検知時の即座な処理中断を実装。ユニットテストにて、一部の失敗が全体に波及し安全に停止する挙動を実証済み。
+  - **Trace ID 伝播**: HTTP Middleware で生成した Trace ID を `context` 経由で伝播。`slog.Handler` を拡張し、全ログ行への `trace_id` 自動刻印を完遂。
+  - **並行処理の Fail-fast**: `errgroup` を用いた異常検知時の即座な処理中断を実装。
 
 ## 🛠 今後の検証ロードマップ
 
@@ -106,60 +114,70 @@
 ## 📁 プロジェクト構造
 ```text
 .
-├── cmd/                # Entry Point (実行環境の決定・DI・起動)
+├── api/                   # API 定義・スキーマ（情報のソースオブトゥルース）
+│   ├── proto/             # gRPC 定義
+│   │   └── file.proto     # gRPC/Protocol Buffers 用の定義
+│   ├── config.yaml        # サービス設定・環境定義
+│   └── openapi.yaml       # REST API (OpenAPI) 仕様書
+├── cmd/                   # Entry Point (実行環境の決定・DI・起動)
 │   └── api/
-│       └── main.go     # システム基盤（slog拡張・DI）の構築とサーバー起動
-├── internal/           # Business Logic (クリーンアーキテクチャのコア)
-│   ├── handler/        # 外部接続（HTTPリクエストの解析・レスポンス生成）
-│   │   ├── file_handler.go
-│   │   └── middleware.go  # Trace ID注入等の共通前処理
-│   ├── domain/         # Entity & Repository Interface (DIPの起点)
+│       └── main.go        # システム基盤（slog拡張・DI）の構築とサーバー起動
+├── internal/              # Business Logic (クリーンアーキテクチャのコア)
+│   ├── domain/            # Entity & Repository Interface (DIPの起点)
 │   │   ├── file.go        # ファイルの実体（Entity）
 │   │   ├── repository.go  # 保存(Repo)と通知(Pipeline)の定義
-│   │   └── metadata.go  # RAG連携用の属性定義
-│   ├── usecase/        # Business Logic (並行処理・制御フロー)
+│   │   └── metadata.go    # RAG連携用の属性定義
+│   ├── usecase/           # Business Logic (並行処理・制御フロー)
 │   │   ├── file_interactor.go       # 並行アップロードのコアロジック
 │   │   └── file_interactor_test.go  # ロジックの正当性を保証するテスト
-│   ├── infra/          # Infrastructure Adapters (技術的詳細の実装)
-│   │   ├── factory.go  # インフラ切り替えの司令塔
-│   │   ├── gcs/                # GCS 具象実装
+│   ├── handler/           # 外部接続（HTTPリクエストの解析・レスポンス生成）
+│   │   ├── appmiddleware/ # アプリ固有のミドルウェア（Trace ID注入等）
+│   │   │   └── trace.go   # Trace ID注入等の共通前処理
+│   │   ├── file_handler.go
+│   │   └── api.gen.go     # OpenAPIから自動生成されたボイラープレート
+│   ├── infra/             # Infrastructure Adapters (技術的詳細の実装)
+│   │   ├── factory.go     # インフラ切り替えの司令塔
+│   │   ├── gcs/           # GCS 具象実装（Workload Identity 対応）
 │   │   |   └── gcs_repository.go
 │   │   ├── local/         # ローカルファイルシステム実装
 │   │   |   └── local_repository.go
+│   │   ├── sql/           # Cloud SQL (PostgreSQL) 永続化・マイグレーション
+│   │   |   ├── db.go         # コネクション・CRUD実装
+│   │   |   └── migrations.go # golang-migrate 実行ロジック
 │   │   └── repository/    # 永続化層の具象実装
-│   │       ├── inmemory/  # 高速な検証を可能にするインメモリDB実装
-│   │       │   └── memory_repository.go
-│   │       └── sql/       # Cloud SQL (PostgreSQL) 永続化・マイグレーション
-│   │           ├── db.go         # コネクション・CRUD実装
-│   │           └── migrations.go # golang-migrate 実行ロジック
-│   └── pkg/            # ユーティリティ・基盤共通パッケージ
-│       └── requestid/  # Trace IDの生成・context伝播・slog拡張実装
-│           ├── handler.go
-│           └── requestid.go
-├── migrations/         # DB スキーマ管理 (SQLファイル)
+│   │       └── inmemory/  # 高速な検証を可能にするインメモリDB実装
+│   │           └── memory_repository.go
+│   └── pkg/               # ユーティリティ・基盤共通パッケージ
+│       └── logger/        # 構造化ログ（slog）基盤。Trace IDの伝播を管理
+│           ├── context.go
+│           └── handler.go
+├── tools/                 # 開発ツールの依存関係管理
+│   └── tools.go           # ビルドツールのバージョンを固定するための Go ファイル
+├── migrations/            # DB スキーマ管理 (SQLファイル)
 │   ├── 000001_create_files_table.up.sql
 │   ├── 000001_create_files_table.down.sql
 │   ├── 000002_add_gin_index_to_tags.up.sql
 │   └── 000002_add_gin_index_to_tags.down.sql
-├── terraform/          # Infrastructure as Code (GCPリソース定義)
-│   ├── main.tf         # GCSリソース・Provider定義
-│   ├── outputs.tf      # インフラ出力情報の定義
-│   └── variables.tf    # プロジェクトID・バケット名の変数管理
-├── .github/workflows/  # CI/CD パイプライン (GitHub Actions)
-│   └── docker-build.yml # 自動コンテナビルド定義
-├── archives/           # 開発初期の実装や試行錯誤の軌跡 (ビルド対象外)
-├── assets.go           # プロジェクト共通資産（SQL等）の embed 定義
-├── docker-compose.yml  # DB・APIの疎結合な依存関係とネットワークを定義
-├── Dockerfile          # マルチステージビルドによる軽量実行イメージ定義
-├── .env                # 環境設定（Git管理対象外）
-├── .go-arch-lint.yml   # アーキテクチャの依存関係を強制する定義ファイル
-├── .golangci.yml       # 商用グレードの静的解析ルール定義
-├── go.mod              # 依存関係管理
-├── README.md           # 本ドキュメント
+├── terraform/             # Infrastructure as Code (GCPリソース定義)
+│   ├── main.tf            # GCSリソース・Provider定義
+│   ├── outputs.tf         # インフラ出力情報の定義
+│   └── variables.tf       # プロジェクトID・バケット名の変数管理
+├── .github/workflows/     # CI/CD パイプライン (GitHub Actions)
+│   └── docker-build.yml   # 自動コンテナビルド定義
+├── assets.go              # プロジェクト共通資産（SQL等）の embed 定義
+├── data/                  # テスト用データ（parallel-test-*.txt 等）
+├── docker-compose.yml     # DB・APIの疎結合な依存関係とネットワークを定義
+├── Dockerfile             # マルチステージビルドによる軽量実行イメージ定義
+├── .env                   # 環境設定（Git管理対象外）
+├── .go-arch-lint.yml      # アーキテクチャの依存関係を強制する定義ファイル
+├── .golangci.yml          # 静的解析ルール定義
+├── go.mod                 # 依存関係管理
+├── Makefile               # 標準化された開発コマンド (gen-api 等)
+├── README.md              # 本ドキュメント
 │
-├── python_comparison/  # [In Progress] Python (AsyncIO) との性能比較検証用
-├── rag_pipeline/       # [In Progress] RAG インジェスト基盤への拡張用設計
-└── aws_infrastructure/ # [In Progress] マルチクラウド (S3) 展開用の設計検討
+├── python_comparison/     # [In Progress] Python (AsyncIO) との性能比較検証用
+├── rag_pipeline/          # [In Progress] RAG インジェスト基盤への拡張用設計
+└── aws_infrastructure/    # [In Progress] マルチクラウド (S3) 展開用の設計検討
 ```
 
 ## 🌐 データフロー戦略
@@ -214,7 +232,21 @@
 
 ## 🛠 Quick Start (Local Development)
 
-外部インフラ（GCP）に依存せず、Docker Compose を用いて「API + DB + 擬似ストレージ」の全環境を即座にローカルで再現可能です。
+外部インフラ（GCP）に依存せず、`Makefile` と`Docker Compose` を用いて「API + DB + 擬似ストレージ」の全環境を即座にローカルで再現可能です。
+
+1. 依存ツールのセットアップ & コード生成
+OpenAPI スキーマから型安全な Go コードを生成します。
+
+```bash
+# 依存ライブラリの同期
+go mod tidy
+
+# OpenAPI スキーマからハンドラ・型定義を自動生成
+make gen-api
+```
+
+2. 環境の起動
+開発スタイルに合わせて、以下のいずれかの方法で起動してください。
 
 ```bash
 ### 🐳 A. Docker Compose (Recommended)
@@ -224,11 +256,15 @@ docker compose up --build
 ### 💻 B. Go Run (Lightweight Mode)
 # 外部インフラに依存せず、インメモリDBとローカルストレージで起動
 STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
-
-### ✅ 動作確認（ヘルスチェック）
-curl http://localhost:8080/health
-
 ```
+
+3. 動作確認（ヘルスチェック）
+```bash
+# システムの稼働状況と起動時パフォーマンス（Gain）を確認
+curl http://localhost:8080/health
+```
+
 ```text
-**Note**: DB起動待ちのリトライアルゴリズムを実装済みのため、サービスは自動で正常な状態に収束します。
+> [!TIP]
+**DBリトライ戦略**: DBコンテナの起動遅延を許容する「指数バックオフによるリトライアルゴリズム」を実装済みです。`docker compose` 実行時、依存関係の順序を問わず、サービスは自動で正常な状態に収束します。
 ```

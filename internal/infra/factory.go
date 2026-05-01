@@ -10,7 +10,7 @@ import (
 	"file-transfer-api/internal/infra/gcs"
 	"file-transfer-api/internal/infra/local"
 	"file-transfer-api/internal/infra/repository/inmemory"
-	"file-transfer-api/internal/infra/repository/sql"
+	"file-transfer-api/internal/infra/sql"
 )
 
 // NewStorageRepository は環境変数に応じて適切なリポジトリを返します
@@ -43,12 +43,7 @@ func NewStorageRepository(ctx context.Context) (domain.FileRepository, error) {
 			bucketName = "file-transfer-bucket-syou-20240121"
 		}
 
-		keyFile := os.Getenv("GCP_KEY_FILE")
-		// ローカル環境（ファイルがある場合）のみ keyFile を設定し、
-		// なければ空のまま NewGCSRepository に渡すようにします。
-		// ※以前のステップで修正した「空でも動くNewGCSRepository」と組み合わせます。
-
-		return gcs.NewGCSRepository(ctx, bucketName, keyFile)
+		return gcs.NewGCSRepository(ctx, bucketName)
 	}
 }
 

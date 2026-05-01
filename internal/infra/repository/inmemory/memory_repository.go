@@ -4,6 +4,7 @@ import (
 	"context"
 	"file-transfer-api/internal/domain"
 	"sync"
+	"time"
 )
 
 type InMemoryRepository struct {
@@ -23,24 +24,30 @@ func NewInMemoryRepository() *InMemoryRepository {
 func (r *InMemoryRepository) Create(ctx context.Context, f *domain.FileMetadata) error {
 	r.Lock()
 	defer r.Unlock()
+
 	r.nextID++
 	f.ID = r.nextID
+
+	// 🚀 時刻を吹き込む
+	now := time.Now()
+	f.CreatedAt = now
+	f.UpdatedAt = now
+
 	r.data[f.ID] = f
 	return nil
 }
 
 func (r *InMemoryRepository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) error {
-	r.Lock()
-	defer r.Unlock()
-	r.nextID++
-	f.ID = r.nextID
-	r.data[f.ID] = f
-	return nil
+	return r.Create(ctx, f)
 }
 
 // インターフェースを満たすための他のメソッドも定義（中身は空でもOK）
 func (r *InMemoryRepository) FindAll(ctx context.Context, q domain.FileSearchQuery) ([]*domain.FileMetadata, error) {
-	return nil, nil
+	results := []*domain.FileMetadata{}
+	for _, f := range r.data {
+		results = append(results, f)
+	}
+	return results, nil
 }
 
 func (r *InMemoryRepository) UpdateStatus(ctx context.Context, id int64, status domain.TransferStatus) error {

@@ -1,0 +1,7 @@
+# api/config.yaml
+package: handler
+output: internal/handler/api.gen.go
+generate:
+  - types       # 構造体（UploadResponse など）の生成
+  - server      # Net/HTTP 用のインターフェース生成
+  - spec        # Swagger Spec をコード内に埋め込む（ランタイムバリデーション用）

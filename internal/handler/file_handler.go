@@ -1,14 +1,17 @@
 package handler
 
 import (
-	"encoding/json"
-	"file-transfer-api/internal/pkg/requestid"
+	"file-transfer-api/internal/domain"
 	"file-transfer-api/internal/usecase"
 	"log/slog"
 	"net/http"
-	"strconv"
+
+	"github.com/labstack/echo/v4"
 )
 
+// 1. 構造体の定義（ServerInterfaceを実装する）
+// ServerInterface は oapi-codegen が生成するインターフェース
+// これを実装することで、スキーマ通りのハンドラーであることを保証します
 type FileHandler struct {
 	interactor *usecase.FileInteractor
 }
@@ -17,50 +20,105 @@ func NewFileHandler(interactor *usecase.FileInteractor) *FileHandler {
 	return &FileHandler{interactor: interactor}
 }
 
-// HandleListFiles は GET /files エエンドポイントを処理します
-func (h *FileHandler) HandleListFiles(w http.ResponseWriter, r *http.Request) {
-	// 🚀 1. Trace ID を生成して context に注入
-	// クライアントから X-Trace-Id ヘッダーがあればそれを使う、なければ新規発行する実装がプロっぽいです
-	traceID := r.Header.Get("X-Trace-Id")
-	ctx := requestid.WithTraceID(r.Context(), traceID)
+// 2. メタデータ一覧取得の実装
+// 🚀 自動生成されたインターフェース（ListFiles）を実装する形になります
+// GetFiles は OpenAPI の operationId: getFiles に対応して自動で呼ばれます
+// tags や params は定義済み型として渡されるので、strconv.Atoi は不要になります！
+func (h *FileHandler) ListFiles(ctx echo.Context, params ListFilesParams) error {
+	// params.Limit には、すでに int 型で値が入っています。
+	// もし limit に文字列が送られてきたら、このメソッドが呼ばれる前に
+	// ライブラリ側で 400 Bad Request を返してくれます。
 
-	// 🚀 2. 開始ログ（以降、ctx を使用する）
-	slog.InfoContext(ctx, "Handling list files request",
-		"method", r.Method,
-		"path", r.URL.Path,
-		"tags", r.URL.Query()["tags"],
+	// 1. Contextの取得（TraceID入り）
+	rCtx := ctx.Request().Context()
+
+	// 2. パラメータの整理（ポインタ解除）
+	// 🚀 params.Tags は自動的に []string になっています！
+	var tags []string
+	if params.Tags != nil {
+		tags = *params.Tags
+		slog.InfoContext(ctx.Request().Context(), "Filtering by tags", "tags", tags)
+	}
+
+	limit := 20
+	if params.Limit != nil {
+		limit = *params.Limit
+	}
+
+	// 3. ロジック実行
+	// 🚀 注目：params.Limit や params.Tags は自動で型変換済み
+	// Usecaseの呼び出し
+	files, err := h.interactor.FetchMetadataList(ctx.Request().Context(), tags, limit, 0)
+	if err != nil {
+		// エラーハンドリング
+		slog.ErrorContext(rCtx, "Failed to fetch metadata list", "error", err)
+		return ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
+	}
+
+	// 4. レスポンス（ヘッダー設定も自動）
+	// 🚀 json.Encode を手書きする必要がなくなり、1行で終わります
+	return ctx.JSON(http.StatusOK, files)
+}
+
+// 3. 他のメソッド（GetHealth, UploadFile）も同様に「器」だけ作ります
+func (h *FileHandler) GetHealth(ctx echo.Context) error {
+	// ベンチマーク結果などをここで返す
+	return ctx.String(http.StatusOK, "OK")
+}
+
+// POST /upload の実装例
+// UploadFile は multipart/form-data を解析し、ファイルをアップロードします
+func (h *FileHandler) UploadFile(ctx echo.Context) error {
+	rCtx := ctx.Request().Context()
+
+	// 1. ファイルの取得
+	// OpenAPIで定義した "file" というキーでファイルを取り出す
+	fileHeader, err := ctx.FormFile("file")
+	if err != nil {
+		slog.ErrorContext(rCtx, "Failed to get file from form", "error", err)
+		return ctx.JSON(http.StatusBadRequest, map[string]string{"error": "file is required"})
+	}
+
+	// 2. その他のパラメータ取得
+	tenantID := ctx.FormValue("tenant_id")
+	// tagsは複数送られてくる可能性があるため FormParams を使う
+	tags := ctx.Request().Form["tags"]
+
+	// 🚀 ポイント：tenantID と tags をログに出力することで「未使用エラー」を回避しつつ、
+	// 実務で重要な「誰が何をしようとしているか」の証跡を残します。
+	slog.InfoContext(rCtx, "Processing upload request",
+		"tenant_id", tenantID,
+		"tags", tags,
+		"filename", fileHeader.Filename,
 	)
 
-	// 3. メソッドバリデーション
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// 4. クエリパラメータの解析（ページネーション & 検索タグ）
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-
-	// 🚀 タグ検索用のパラメータ取得
-	// ?tags=golang,aws のようなカンマ区切り、または ?tags=golang&tags=aws の複数指定を想定
-	tags := r.URL.Query()["tags"]
-	// ※ tags := r.URL.Query().Get("tags") ではなく []string で取得できるこの書き方が便利です
-
-	// 🚀 5. Usecase の呼び出し（注入した ID 入りの ctx を渡す）
-	files, err := h.interactor.FetchMetadataList(ctx, tags, limit, offset)
+	// 3. ファイルを読み込み可能な状態にする
+	src, err := fileHeader.Open()
 	if err != nil {
-		// 🚀 6. エラーログ：何が原因で失敗したか属性付きで記録
-		slog.ErrorContext(ctx, "Failed to fetch metadata list",
-			"error", err,
-			"tags", tags,
-		)
-		http.Error(w, "Failed to fetch files: "+err.Error(), http.StatusInternalServerError)
-		return
+		return ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to open file"})
+	}
+	defer src.Close()
+
+	// 4. Domainモデルへの変換
+	// interactor が期待する domain.File 型を作る
+	// domain.NewFile(name, size, reader) のような関数があればそれを使います
+	f := domain.NewFile(fileHeader.Filename, fileHeader.Size, src)
+
+	// TODO: domain.File 構造体に Tags フィールドを追加したら以下のコメントを外す
+	// f.Tags = tags
+	// f.TenantID = tenantID
+
+	// 5. ロジック実行（並行アップロードではなく、単発アップロードを呼ぶ）
+	// もし UploadMultipleParallel しか無い場合はスライスに入れて渡します
+	err = h.interactor.UploadMultipleParallel(rCtx, []*domain.File{f})
+	if err != nil {
+		slog.ErrorContext(rCtx, "Upload failed", "file", f.Name, "error", err)
+		return ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "upload failed"})
 	}
 
-	// 7. レスポンスの返却
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(files); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	// 6. レスポンス（OpenAPIのスキーマに合わせる）
+	return ctx.JSON(http.StatusCreated, map[string]string{
+		"status":  "success",
+		"message": "File uploaded successfully",
+	})
 }
