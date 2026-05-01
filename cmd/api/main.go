@@ -192,7 +192,7 @@ func main() {
 	// --- [4] Echo サーバーの構築 ---
 	e := echo.New()
 
-	// 🚀 永田さんの Middleware を Echo 用にラップして登録
+	// 🚀 Middleware を Echo 用にラップして登録
 	// (後述の Adaptor を使うか、Echo 用に書き換えたものを使用)
 	e.Use(echo.WrapMiddleware(appmiddleware.TraceMiddleware))
 	e.Use(middleware.Recover()) // パニック時に落ちないように

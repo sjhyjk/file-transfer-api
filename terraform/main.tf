@@ -148,7 +148,7 @@ resource "google_iam_workload_identity_pool_provider" "github_provider" {
     "attribute.aud"              = "assertion.aud"
   }
   
-  # ここを追加：特定のリポジトリ（永田さんのリポジトリ）以外からのアクセスを入り口で弾く設定
+  # ここを追加：特定のリポジトリ以外からのアクセスを入り口で弾く設定
   # これにより、GCP側が求める「Claimsの参照」を完全に満たします。
   attribute_condition = "assertion.repository == 'sjhyjk/file-transfer-api'"
 

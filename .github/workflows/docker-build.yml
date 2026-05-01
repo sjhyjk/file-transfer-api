@@ -55,7 +55,7 @@ jobs:
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v9
       with:
-        version: v2.11
+        version: latest
 
     # ✅ ステップ3: ユニットテスト（モック環境）の実行
     # これが失敗すると、下のビルドやデプロイは実行されません（安全！）
