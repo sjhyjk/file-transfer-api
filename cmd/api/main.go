@@ -3,17 +3,21 @@ package main
 import (
 	"bytes"
 	"context"
-	file_transfer_api "file-transfer-api" // ルートパッケージをインポート
+	file_transfer_api "file-transfer-api"
 	"fmt"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
 
 	"file-transfer-api/internal/domain"
-	"file-transfer-api/internal/handler"
-	"file-transfer-api/internal/handler/appmiddleware"
+	appgrpc "file-transfer-api/internal/handler/grpc"
+	filepb "file-transfer-api/internal/handler/grpc/pb"
+	"file-transfer-api/internal/handler/rest"
+	apprest "file-transfer-api/internal/handler/rest"
+	"file-transfer-api/internal/handler/rest/appmiddleware"
 	"file-transfer-api/internal/infra"
 	"file-transfer-api/internal/infra/sql"
 	"file-transfer-api/internal/pkg/logger"
@@ -22,6 +26,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -189,7 +195,24 @@ func main() {
 	// 🚀 [5] Cloud Run / API サーバー用設定
 	// =========================================================
 
-	// --- [4] Echo サーバーの構築 ---
+	// 1. gRPCサーバーの起動 (別ポート: 50051)
+	grpcSrv := grpc.NewServer()
+
+	// 🚀 Reflectionを登録（grpcurl等からサービス一覧を見えるようにする）
+	reflection.Register(grpcSrv)
+
+	grpcHandler := appgrpc.NewGRPCFileHandler(interactor)
+	filepb.RegisterFileServiceServer(grpcSrv, grpcHandler)
+
+	go func() {
+		lis, _ := net.Listen("tcp", ":50051")
+		slog.Info("📡 Starting gRPC server", "port", "50051")
+		if err := grpcSrv.Serve(lis); err != nil {
+			slog.Error("gRPC server failed", "error", err)
+		}
+	}()
+
+	// 2. HTTPサーバーの起動 (メインスレッド)
 	e := echo.New()
 
 	// 🚀 Middleware を Echo 用にラップして登録
@@ -198,11 +221,11 @@ func main() {
 	e.Use(middleware.Recover()) // パニック時に落ちないように
 
 	// ハンドラーの初期化
-	fileHandler := handler.NewFileHandler(interactor)
+	httpHandler := apprest.NewHTTPFileHandler(interactor)
 
 	// 🚀 自動生成されたハンドラーを一括登録！
 	// これにより YAML で定義した /files, /upload 等が紐付きます
-	handler.RegisterHandlers(e, fileHandler)
+	rest.RegisterHandlers(e, httpHandler)
 
 	// 🚀 個別のヘルスチェック (OpenAPI外の自由なルート)
 	e.GET("/health-check", func(c echo.Context) error {
@@ -222,7 +245,7 @@ func main() {
 
 	// すでに上で port := os.Getenv("PORT") (or "8080") と定義しているので、
 	// それを使い回すのが安全です。
-	slog.Info("📡 Starting server", "port", port)
+	slog.Info("📡 Starting HTTP server", "port", port)
 
 	// 🚀 Echo スタイルの起動方法（こちらを推奨）
 	if err := e.Start(":" + port); err != nil {

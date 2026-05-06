@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package file;
+option go_package = "file-transfer-api/internal/handler/grpc/pb;filepb";
+
+service FileService {
+  // Client-side Streaming: チャンクを連続して送り、最後にレスポンスを1つ返す
+  rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse);
+}
+
+message UploadFileRequest {
+  oneof data {
+    FileMetadata metadata = 1; // 最初にメタデータ（TenantID, Tags等）を送る
+    bytes chunk = 2;      // その後、バイナリを細切れに送る
+  }
+}
+
+message FileMetadata {
+  string filename = 1;
+  string tenant_id = 2;
+  repeated string tags = 3;
+}
+
+message UploadFileResponse {
+  string status = 1;
+  string message = 2;
+}

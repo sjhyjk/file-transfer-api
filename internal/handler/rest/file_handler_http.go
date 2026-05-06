@@ -1,4 +1,4 @@
-package handler
+package rest
 
 import (
 	"file-transfer-api/internal/domain"
@@ -12,19 +12,19 @@ import (
 // 1. 構造体の定義（ServerInterfaceを実装する）
 // ServerInterface は oapi-codegen が生成するインターフェース
 // これを実装することで、スキーマ通りのハンドラーであることを保証します
-type FileHandler struct {
+type HTTPFileHandler struct {
 	interactor *usecase.FileInteractor
 }
 
-func NewFileHandler(interactor *usecase.FileInteractor) *FileHandler {
-	return &FileHandler{interactor: interactor}
+func NewHTTPFileHandler(interactor *usecase.FileInteractor) *HTTPFileHandler {
+	return &HTTPFileHandler{interactor: interactor}
 }
 
 // 2. メタデータ一覧取得の実装
 // 🚀 自動生成されたインターフェース（ListFiles）を実装する形になります
 // GetFiles は OpenAPI の operationId: getFiles に対応して自動で呼ばれます
 // tags や params は定義済み型として渡されるので、strconv.Atoi は不要になります！
-func (h *FileHandler) ListFiles(ctx echo.Context, params ListFilesParams) error {
+func (h *HTTPFileHandler) ListFiles(ctx echo.Context, params ListFilesParams) error {
 	// params.Limit には、すでに int 型で値が入っています。
 	// もし limit に文字列が送られてきたら、このメソッドが呼ばれる前に
 	// ライブラリ側で 400 Bad Request を返してくれます。
@@ -61,14 +61,14 @@ func (h *FileHandler) ListFiles(ctx echo.Context, params ListFilesParams) error 
 }
 
 // 3. 他のメソッド（GetHealth, UploadFile）も同様に「器」だけ作ります
-func (h *FileHandler) GetHealth(ctx echo.Context) error {
+func (h *HTTPFileHandler) GetHealth(ctx echo.Context) error {
 	// ベンチマーク結果などをここで返す
 	return ctx.String(http.StatusOK, "OK")
 }
 
 // POST /upload の実装例
 // UploadFile は multipart/form-data を解析し、ファイルをアップロードします
-func (h *FileHandler) UploadFile(ctx echo.Context) error {
+func (h *HTTPFileHandler) UploadFile(ctx echo.Context) error {
 	rCtx := ctx.Request().Context()
 
 	// 1. ファイルの取得

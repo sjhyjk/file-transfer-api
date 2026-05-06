@@ -7,14 +7,14 @@
 ## 🚀 実装の柱
 
 ### 🏛️ スキーマ駆動開発 & クリーンアーキテクチャによる疎結合設計
-`api/openapi.yaml` を **Single Source of Truth (SSOT)** と定義し、`oapi-codegen` による型安全なコード生成を導入。設計（Schema）が実装（Code）を規定する「理論駆動」の開発プロセスを確立しています。依存性の逆転（DIP）を徹底し、ビジネスロジックを特定の実行環境やインフラから分離。さらに `go-arch-lint` を用いた **Architecture Testing** により、設計の腐敗を静的に遮断しています。
+OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成（oapi-codegen / protoc）による型安全な実装を強制。DIP の徹底によりビジネスロジックをインフラから隔離し、 `go-arch-lint` を用いた **Architecture Testing** により、設計の腐敗を静的に遮断しています。
 
-- **API Layer (Echo)**: `Echo` フレームワークを採用し、自動生成されたインターフェースを実装。ミドルウェア（appmiddleware）による **OIDC (OpenID Connect)** 認証と **Trace ID 注入** を統合し、入り口でのガバナンスを徹底。
+- **Transport Layer (Echo & gRPC)**: `Echo` および `gRPC` を併用し、共通の Interactor を介したマルチプロトコル・アダプター構成を採用。gRPC では **Reflection API** を有効化し、動的なサービス探索に対応。Middleware/Interceptor による **OIDC 認証** と **Trace ID 注入** を統合し、入り口でのガバナンスを共通化。
 - **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、外部（Repository/Pipeline）との契約となるインターフェースを配置。全レイヤーの依存が向かう「不動の頂点」として定義。
 - **Usecase**: `errgroup` を活用した **Fail-fast な並行処理制御** を実装。。`infra` 層の具象実装を一切参照せず、純粋なビジネスロジック（並行アップロードのオーケストレーション等）に特化。
-- **Infrastructure (Factory Pattern)**: `STORAGE_TYPE` 等の環境変数に基づき、GCS/Local Storage/S3（予定）、Cloud SQL/In-Memory DB を動的に切り替える **Plug-and-Play** な構成を採用。
-- **cmd (Main Component)**: 依存注入（DI）と起動のみに特化。アプリケーションを「何として（API/CLI）」動かすかを外部から注入可能にし、コアロジックの再利用性を最大化。
-- **Observability**: `slog` を拡張し、`context` 経由で全層に Trace ID を伝播。並行処理下でもリクエスト単位のログ追跡を完全に実現。
+- **Infrastructure (Factory Pattern)**: 環境変数に基づき、GCS/Local Storage/S3（予定）、Cloud SQL/In-Memory DB を動的に切り替える **Plug-and-Play** な構成を採用。
+- **cmd (Main Component)**: 依存注入（DI）と起動に特化。API/gRPC/CLI といった実行形態を外部から注入可能にし、コアロジックの再利用性を最大化。
+- **Observability**: `slog` を拡張し、**REST / gRPC 両プロトコルを横断**して Trace ID を伝播。並行処理下でも、リクエスト単位のログ追跡を完全に実現。
 
 ## ⚡ Go の並行処理モデルの実測検証
 
@@ -61,10 +61,10 @@
 
 📂 Schema-First & API Governance
 
-- [x] **OpenAPI 3.0 によるスキーマ駆動開発 (SSOT)** 🎉 Done
-  - **Single Source of Truth**: `api/openapi.yaml` を唯一の正解とし、`oapi-codegen` を用いて型安全な Go コード（Server Interface / Types / Spec）を自動生成。仕様と実装の乖離を構造的に排除。
-  - **Echo フレームワーク移行**: 柔軟なルーティングとミドルウェア管理を実現するため `Echo` を採用。自動生成コードとの統合により、ボイラープレートを最小化。
-  - **バリデーションの統合**: リクエストボディやクエリパラメータのバリデーションを、スキーマ定義から自動で適用。不正なリクエストをハンドラ到達前に遮断。
+- [x] **マルチプロトコル・スキーマ駆動開発 (SSOT)** 🎉 Done
+  - **Single Source of Truth**: OpenAPI 3.0 および Protocol Buffers を採用。仕様と実装の乖離を構造的に排除。
+  - **gRPC Reflection の導入**: サービス定義を動的に公開。`grpcurl` 等による高速なデバッグサイクルを確立。
+  - **自動生成の統合**: `oapi-codegen` および `protoc` による型安全な Go コード生成をパイプライン化。
 
 📂 Database & Persistence Strategy
 
@@ -81,7 +81,7 @@
 
 - [x] **GitHub Actions による高度な CI 構築** 🎉 *Done*
   - **安全性と性能の自動化**: `go test` による自動テスト、`testing.B` による性能監視、および商用グレードのリンターによる**機密情報混入の静的検知**を統合。
-  - **運用最適化**: `workflow_dispatch` を導入し、コストや状況に応じた**柔軟な手動デプロイ制御（If-conditional flow）**を確立。
+  - **運用最適化**: `workflow_dispatch` を導入し、コストや状況に応じた**柔軟な手動デプロイ制御(If-conditional flow)**を確立。
 
 - [x] **Cloud Run への自動デプロイ (CD)** 🎉 *Done*
   - **Attack Surface 最小化**: **Distroless** イメージを採用し、実行環境の脆弱性リスクを根本から低減。
@@ -103,13 +103,17 @@
   - **Trace ID 伝播**: HTTP Middleware で生成した Trace ID を `context` 経由で伝播。`slog.Handler` を拡張し、全ログ行への `trace_id` 自動刻印を完遂。
   - **並行処理の Fail-fast**: `errgroup` を用いた異常検知時の即座な処理中断を実装。
 
+- [x] **マルチプロトコル・アダプターの構築** 🎉 *Done*
+  - **Handler Layer の分離**: 同一の Interactor (Usecase) を Echo (REST) と gRPC の両ハンドラで共用。プロトコル非依存の純粋なビジネスロジックを隔離。
+  - **共通基盤の統合**: HTTP Middleware と gRPC Interceptor で共通の Trace ID 伝播・ログ・エラーハンドリングを実現。
+
 ## 🛠 今後の検証ロードマップ
 
-- [ ] **gRPC / スキーマ駆動によるシステム間連携**
-  - `Protocol Buffers` による型定義を先行させ、マイクロサービス化を見据えた高性能・型安全な内部通信の検証。
-
 - [ ] **RAG / データインジェスト基盤への統合**
-  - 本基盤を前処理パイプラインとして活用し、イベント駆動（Pub/Sub）による非同期なデータ処理連鎖の実装。 
+  - 本基盤を前処理パイプラインとして活用し、イベント駆動（Pub/Sub）による非同期なデータ処理連鎖の実装。
+
+- [ ] **言語横断的な gRPC スキーマ統制 (Polyglot Governance)**
+  - Python (AsyncIO) クライアントからの接続検証。RAG パイプラインにおけるメタデータ受け渡しを想定した性能比較。
 
 ## 📁 プロジェクト構造
 ```text
@@ -120,8 +124,9 @@
 │   ├── config.yaml        # サービス設定・環境定義
 │   └── openapi.yaml       # REST API (OpenAPI) 仕様書
 ├── cmd/                   # Entry Point (実行環境の決定・DI・起動)
-│   └── api/
-│       └── main.go        # システム基盤（slog拡張・DI）の構築とサーバー起動
+│   ├── api/
+│   │   └── main.go        # サーバー起動
+│   └── benchmark/
 ├── internal/              # Business Logic (クリーンアーキテクチャのコア)
 │   ├── domain/            # Entity & Repository Interface (DIPの起点)
 │   │   ├── file.go        # ファイルの実体（Entity）
@@ -131,10 +136,16 @@
 │   │   ├── file_interactor.go       # 並行アップロードのコアロジック
 │   │   └── file_interactor_test.go  # ロジックの正当性を保証するテスト
 │   ├── handler/           # 外部接続（HTTPリクエストの解析・レスポンス生成）
-│   │   ├── appmiddleware/ # アプリ固有のミドルウェア（Trace ID注入等）
-│   │   │   └── trace.go   # Trace ID注入等の共通前処理
-│   │   ├── file_handler.go
-│   │   └── api.gen.go     # OpenAPIから自動生成されたボイラープレート
+│   │   ├── grpc/          # gRPC ハンドラー実装 & Reflection 制御
+│   │   │   ├── file_handler_grpc.go
+│   │   │   └── pb/        # protoc生成ファイル
+│   │   │       ├── file.pb.go
+│   │   │       └── file_grpc.pb.go
+│   │   └── rest/          # Echo ハンドラー実装
+│   │       ├── file_handler_http.go
+│   │       ├── api.gen.go     # OpenAPIから自動生成されたボイラープレート
+│   │       └── appmiddleware/ # アプリ固有のミドルウェア（Trace ID注入等）
+│   │           └── trace.go   # Trace ID注入等の共通前処理
 │   ├── infra/             # Infrastructure Adapters (技術的詳細の実装)
 │   │   ├── factory.go     # インフラ切り替えの司令塔
 │   │   ├── gcs/           # GCS 具象実装（Workload Identity 対応）
