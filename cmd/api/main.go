@@ -15,7 +15,6 @@ import (
 	"file-transfer-api/internal/domain"
 	appgrpc "file-transfer-api/internal/handler/grpc"
 	filepb "file-transfer-api/internal/handler/grpc/pb"
-	"file-transfer-api/internal/handler/rest"
 	apprest "file-transfer-api/internal/handler/rest"
 	"file-transfer-api/internal/handler/rest/appmiddleware"
 	"file-transfer-api/internal/infra"
@@ -225,7 +224,7 @@ func main() {
 
 	// 🚀 自動生成されたハンドラーを一括登録！
 	// これにより YAML で定義した /files, /upload 等が紐付きます
-	rest.RegisterHandlers(e, httpHandler)
+	apprest.RegisterHandlers(e, httpHandler)
 
 	// 🚀 個別のヘルスチェック (OpenAPI外の自由なルート)
 	e.GET("/health-check", func(c echo.Context) error {

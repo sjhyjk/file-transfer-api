@@ -33,18 +33,32 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 
 	// 3. 非同期でストリームを読み込み、パイプに書き込む
 	go func() {
-		defer pw.Close()
+		// pw.Close() の戻り値を無視せず、必要なら CloseWithError に集約
+		defer func() {
+			if closeErr := pw.Close(); closeErr != nil {
+				// ここでエラーが発生した場合は既に pr 側が閉じている可能性があるため
+				// ログ出力等に留めるのが一般的です
+			}
+		}()
+
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
+				// pr 側にエラーを伝播させる（errcheck対象外）
 				pw.CloseWithError(err)
 				return
 			}
+
 			if chunk := req.GetChunk(); chunk != nil {
-				pw.Write(chunk)
+				// 【修正】pw.Write のエラーチェックを追加
+				if _, writeErr := pw.Write(chunk); writeErr != nil {
+					// 書き込みエラー（pr側が閉じられた等）が発生した場合は即座に終了
+					_ = pw.CloseWithError(writeErr)
+					return
+				}
 			}
 		}
 	}()
