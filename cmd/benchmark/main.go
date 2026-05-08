@@ -30,6 +30,8 @@ func main() {
 	ctx := context.Background()
 
 	var (
+		fileRepo       domain.FileRepository
+		metadataRepo   domain.MetadataRepository
 		err            error
 		dbCleanup      func()
 		storageCleanup func()
@@ -39,15 +41,16 @@ func main() {
 	// [1] インフラ層（検証用インメモリ・ローカル）の初期化
 	// ---------------------------------------------------------
 	// 1. MetadataRepo (ベンチマーク時は DB_TYPE=INMEMORY を環境変数に設定することを想定)
+
 	// ※ 性能差を見るため、I/O負荷が少ないインメモリ構成を基本とします
-	metadataRepo, storageCleanup, err := infra.NewMetadataRepository(ctx, file_transfer_api.MigrationFS)
+	metadataRepo, dbCleanup, err = infra.NewMetadataRepository(ctx, file_transfer_api.MigrationFS)
 	if err != nil {
 		os.Exit(1)
 	}
 	defer dbCleanup()
 
 	// 2. StorageRepo (cfg を渡す)
-	fileRepo, storageCleanup, err := infra.NewStorageRepository(ctx, cfg)
+	fileRepo, storageCleanup, err = infra.NewStorageRepository(ctx, cfg)
 	if err != nil {
 		slog.Error("failed to init storage repo for benchmark", "error", err)
 		os.Exit(1)
