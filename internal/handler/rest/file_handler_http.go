@@ -1,8 +1,9 @@
+// internal/handler/rest/file_handler_http.go
+
 package rest
 
 import (
 	"file-transfer-api/internal/domain"
-	"file-transfer-api/internal/usecase"
 	"log/slog"
 	"net/http"
 
@@ -13,10 +14,10 @@ import (
 // ServerInterface は oapi-codegen が生成するインターフェース
 // これを実装することで、スキーマ通りのハンドラーであることを保証します
 type HTTPFileHandler struct {
-	interactor *usecase.FileInteractor
+	interactor domain.FileUseCase
 }
 
-func NewHTTPFileHandler(interactor *usecase.FileInteractor) *HTTPFileHandler {
+func NewHTTPFileHandler(interactor domain.FileUseCase) *HTTPFileHandler {
 	return &HTTPFileHandler{interactor: interactor}
 }
 
@@ -36,7 +37,7 @@ func (h *HTTPFileHandler) ListFiles(ctx echo.Context, params ListFilesParams) er
 	// 🚀 params.Tags は自動的に []string になっています！
 	var tags []string
 	if params.Tags != nil {
-		tags = *params.Tags
+		tags = *params.Tags // ポインタから実体を取得
 		slog.InfoContext(ctx.Request().Context(), "Filtering by tags", "tags", tags)
 	}
 
@@ -108,7 +109,10 @@ func (h *HTTPFileHandler) UploadFile(ctx echo.Context) error {
 	// 4. Domainモデルへの変換
 	// interactor が期待する domain.File 型を作る
 	// domain.NewFile(name, size, reader) のような関数があればそれを使います
-	f := domain.NewFile(fileHeader.Filename, fileHeader.Size, src)
+	f, err := domain.NewFile(fileHeader.Filename, fileHeader.Size, src)
+	if err != nil {
+		return ctx.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
 
 	// TODO: domain.File 構造体に Tags フィールドを追加したら以下のコメントを外す
 	// f.Tags = tags

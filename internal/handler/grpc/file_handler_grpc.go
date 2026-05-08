@@ -1,9 +1,10 @@
+// internal/handler/grpc/file_handler_grpc.go
+
 package grpc
 
 import (
 	"file-transfer-api/internal/domain"
 	filepb "file-transfer-api/internal/handler/grpc/pb"
-	"file-transfer-api/internal/usecase"
 	"io"
 	"log/slog"
 
@@ -14,10 +15,10 @@ import (
 type GRPCFileHandler struct {
 	// protocが生成する未実装エラー防止用の構造体を埋め込み
 	filepb.UnimplementedFileServiceServer
-	interactor *usecase.FileInteractor
+	interactor domain.FileUseCase
 }
 
-func NewGRPCFileHandler(interactor *usecase.FileInteractor) *GRPCFileHandler {
+func NewGRPCFileHandler(interactor domain.FileUseCase) *GRPCFileHandler {
 	return &GRPCFileHandler{interactor: interactor}
 }
 
@@ -74,7 +75,10 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 
 	// 4. 既存の Usecase を呼び出す
 	// ストリームから流れてくる pr (io.Reader) をそのまま domain.File に渡す
-	f := domain.NewFile(meta.Filename, 0, pr) // サイズ不明の場合は 0 またはメタデータから取得
+	f, err := domain.NewFile(meta.Filename, 0, pr) // サイズ不明の場合は 0 またはメタデータから取得
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "invalid metadata: %v", err)
+	}
 
 	// 既存のロジックを再利用（DIPの恩恵）
 	err = h.interactor.UploadMultipleParallel(stream.Context(), []*domain.File{f})

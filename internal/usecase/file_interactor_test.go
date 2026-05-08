@@ -1,9 +1,12 @@
+// internal/usecase/file_interactor_test.go
+
 package usecase
 
 import (
 	"context"
 	"errors"
 	"file-transfer-api/internal/domain"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -57,7 +60,9 @@ func BenchmarkUploadMultipleParallel(b *testing.B) { // *testing.B に修正
 	// 10個のダミーファイルを生成
 	files := make([]*domain.File, 10)
 	for i := 0; i < 10; i++ {
-		files[i] = &domain.File{Name: "bench.txt"}
+		// ✅ NewFile を使うか、エラーを処理する
+		f, _ := domain.NewFile(fmt.Sprintf("bench-%d.txt", i), 100, strings.NewReader("dummy"))
+		files[i] = f
 	}
 
 	b.ResetTimer() // 純粋なループ処理だけを計測するためにタイマーをリセット
@@ -90,11 +95,11 @@ func TestUploadMultipleParallel_FailFast(t *testing.T) {
 
 	interactor := NewFileInteractor(repo, metaRepo, nil)
 
-	testFiles := []*domain.File{
-		domain.NewFile("success-1.txt", 10, nil),
-		domain.NewFile(failFileName, 10, nil), // ここでエラーを発生させる
-		domain.NewFile("success-2.txt", 10, nil),
-	}
+	f1, _ := domain.NewFile("success-1.txt", 10, nil)
+	f2, _ := domain.NewFile(failFileName, 10, nil) // ここでエラーを発生させる
+	f3, _ := domain.NewFile("success-2.txt", 10, nil)
+
+	testFiles := []*domain.File{f1, f2, f3}
 
 	// 2. 実行：context.Background() を渡す
 	err := interactor.UploadMultipleParallel(context.Background(), testFiles)

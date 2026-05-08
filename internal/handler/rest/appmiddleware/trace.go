@@ -1,3 +1,5 @@
+// internal/handler/rest/appmiddleware/trace.go
+
 package appmiddleware
 
 import (

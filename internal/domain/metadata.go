@@ -1,3 +1,5 @@
+// internal/domain/metadata.go
+
 package domain
 
 import "time"

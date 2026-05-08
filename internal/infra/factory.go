@@ -1,7 +1,10 @@
+// internal/infra/factory.go
+
 package infra
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,51 +14,81 @@ import (
 	"file-transfer-api/internal/infra/local"
 	"file-transfer-api/internal/infra/repository/inmemory"
 	"file-transfer-api/internal/infra/sql"
+	"file-transfer-api/internal/pkg/config"
 )
 
 // NewStorageRepository は環境変数に応じて適切なリポジトリを返します
-func NewStorageRepository(ctx context.Context) (domain.FileRepository, error) {
-	// 環境変数 STORAGE_TYPE で切り替え (デフォルトは GCS)
-	storageType := os.Getenv("STORAGE_TYPE")
+func NewStorageRepository(ctx context.Context, cfg *config.Config) (domain.FileRepository, func(), error) {
+	// config ですでに値がセットされているので、そのまま使うだけ (デフォルトは GCS)
+	storageType := cfg.StorageType
 
 	if storageType == "" {
 		storageType = "GCS" // デフォルト
 	}
 
+	var repo domain.FileRepository
+	var err error
+
 	// 🚀 導入ポイント：どのインフラを選択したか記録する
 	slog.InfoContext(ctx, "Initializing storage repository", "type", storageType)
 
+	// 1. 生成ロジックのみを switch に書く
 	switch storageType {
 	case "LOCAL":
-		// 🚀 新設：ローカルの /tmp や ./data に保存するリポジトリ
+		// 🚀 ローカルの /tmp や ./data に保存するリポジトリ
 		// これを作れば GCP が止まっていても API が動かせる！
 		// ディレクトリ `./data` がなければ自動で作るような実装にすると親切です
-		return local.NewLocalRepository("./data"), nil
+		repo = local.NewLocalRepository("./data")
 
 	case "S3":
 		// 将来的にここに AWS S3 の初期化を書く
-		return nil, fmt.Errorf("S3 repository is not implemented yet")
+		err = fmt.Errorf("S3 repository is not implemented yet")
 
 	default:
-		// GCS の初期化
-		bucketName := os.Getenv("BUCKET_NAME")
-		if bucketName == "" {
-			bucketName = "file-transfer-bucket-syou-20240121"
-		}
-
-		return gcs.NewGCSRepository(ctx, bucketName)
+		// cfg.BucketName にはデフォルト値か環境変数の値が必ず入っている
+		repo, err = gcs.NewGCSRepository(ctx, cfg.BucketName)
 	}
+
+	// 2. 🚀 最後に共通でエラーチェックをする
+	// これにより、どのストレージタイプを選んでも失敗時に必ずログが出ます
+	if err != nil {
+		slog.ErrorContext(ctx, "⚠️ ストレージリポジトリの初期化に失敗",
+			"type", storageType,
+			"error", err,
+		)
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "✅ Storage repository initialized", "type", storageType)
+
+	// 🚀 修正：現状は Close が不要でも、将来のために空の cleanup を返す
+	cleanup := func() {
+		slog.Info("Closing storage repository")
+	}
+
+	return repo, cleanup, nil
 }
 
 // NewMetadataRepository は環境に応じて DB 実装を切り替える
-func NewMetadataRepository(ctx context.Context) (domain.MetadataRepository, error) {
+// 🚀 sql.OpenWithRetry をここで呼ぶことで main をクリーンにする
+func NewMetadataRepository(ctx context.Context, fs embed.FS) (domain.MetadataRepository, func(), error) {
 	dbType := os.Getenv("DB_TYPE")
+	dbURL := os.Getenv("DATABASE_URL")
 
 	if dbType == "INMEMORY" {
-		slog.InfoContext(ctx, "Using In-Memory Metadata Repository")
-		return inmemory.NewInMemoryRepository(), nil
+		slog.InfoContext(ctx, "💡 DB_TYPE is INMEMORY. Skipping PostgreSQL connections and migrations.")
+		// インメモリの場合は cleanup (Close) が不要なので、空の関数を返します
+		var repo domain.MetadataRepository = inmemory.NewInMemoryRepository()
+		return repo, func() {}, nil
 	}
 
-	// デフォルトは実機の PostgreSQL
-	return sql.NewRepository(ctx)
+	// 🚀 実機DBの場合はリトライとマイグレーションを実行
+	repo, err := sql.OpenWithRetry(ctx, dbURL, fs)
+	if err != nil {
+		// エラーログは OpenWithRetry 内で詳細に出ているのでラップして返す
+		return nil, nil, fmt.Errorf("failed to initialize SQL repository: %w", err)
+	}
+
+	// 呼び出し側で close できるように cleanup 関数を返す
+	return repo, func() { repo.Close() }, nil
 }

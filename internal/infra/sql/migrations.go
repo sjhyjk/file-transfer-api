@@ -1,3 +1,5 @@
+// internal/infra/sql/migrations.go
+
 package sql
 
 import (

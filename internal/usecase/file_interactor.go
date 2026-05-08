@@ -1,3 +1,5 @@
+// internal/usecase/file_interactor.go
+
 package usecase
 
 import (
@@ -14,21 +16,25 @@ import (
 // FileInteractor は、ファイル操作のビジネスロジックを管理します
 type FileInteractor struct {
 	repo         domain.FileRepository
-	metadataRepo domain.MetadataRepository // ★ 追加：DB用
-	pipeline     domain.DataPipeline       // ★ 追加：RAGなど後続処理への通知用
+	metadataRepo domain.MetadataRepository // ★ DB用
+	pipeline     domain.DataPipeline       // ★ RAGなど後続処理への通知用
 }
 
 func NewFileInteractor(repo domain.FileRepository, metadataRepo domain.MetadataRepository, pipeline domain.DataPipeline) *FileInteractor {
 	return &FileInteractor{
 		repo:         repo,
-		metadataRepo: metadataRepo, // ★ 注入
-		pipeline:     pipeline,     // ★ 注入（Dependency Injection）
+		metadataRepo: metadataRepo,
+		pipeline:     pipeline, // ★（Dependency Injection）
 	}
 }
 
 // UploadSingle は、単一のファイルをアップロードする手順を定義します
 func (i *FileInteractor) UploadSingle(ctx context.Context, name string, size int64, content io.Reader) error {
-	file := domain.NewFile(name, size, content)
+	file, err := domain.NewFile(name, size, content)
+	if err != nil {
+		return fmt.Errorf("failed to create domain file: %w", err)
+	}
+
 	if err := i.repo.Save(ctx, file.Name, file.Content); err != nil {
 		return err
 	}
@@ -60,18 +66,11 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 			}
 
 			// 2. ★ DB（Cloud SQL）へのメタデータ保存 ★
-			meta := &domain.FileMetadata{
-				FileName: f.Name,
-				FileSize: f.Size,
-				Status:   domain.StatusCompleted, // アップロード成功したので完了とする
-				Source:   "direct-upload",
-				Tags:     []string{"parallel-upload", "test"},
-			}
+			meta := f.ToMetadata("parallel-upload")
 
 			if i.metadataRepo != nil {
 				if err := i.metadataRepo.SaveMetadata(egCtx, meta); err != nil {
-					// ★ ここでロールバック発動！
-					// 失敗した時だけ GCS から消しに行く（補償トランザクション）
+					// ★ ロールバック（補償トランザクション）
 					// egCtx はキャンセルされている可能性があるため、Background を使うのが安全です
 					// ロールバック処理にはキャンセルされていない context.Background() を使うのがコツです
 					rollbackCtx := context.Background()

@@ -1,11 +1,15 @@
+// internal/infra/sql/db.go
+
 package sql
 
 import (
 	"context"
+	"embed"
 	"file-transfer-api/internal/domain"
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -172,4 +176,39 @@ func (r *Repository) FindAll(ctx context.Context, q domain.FileSearchQuery) ([]*
 	}
 
 	return results, nil
+}
+
+// OpenWithRetry は main にあったリトライとログ出力をカプセル化したものです
+func OpenWithRetry(ctx context.Context, dbURL string, fs embed.FS) (*Repository, error) {
+	slog.Info("🔌 Connecting to Cloud SQL and Running Migrations...")
+	var repo *Repository
+	var lastErr error
+	maxRetries := 5
+
+	for i := 1; i <= maxRetries; i++ {
+		// A. マイグレーション実行
+		if lastErr = RunMigrations(ctx, dbURL, fs); lastErr == nil {
+			// B. 成功したらリポジトリ生成
+			// 内部で pgxpool.New と Ping を実行
+			if repo, lastErr = NewRepository(ctx); lastErr == nil {
+				// ✨ 成功ログを出してから return する
+				slog.Info("🎉 Database is ready and migrated!")
+				return repo, nil // 完璧
+			}
+		}
+
+		// 失敗時の処理（まだリトライの可能性がある場合）
+		if i < maxRetries {
+			slog.WarnContext(ctx, "⚠️ DB not ready. Retrying...",
+				"attempt", i,
+				"max", maxRetries,
+				"error", lastErr,
+			)
+			time.Sleep(2 * time.Second) // 2秒待機してリトライ
+		}
+	}
+
+	// ⚡ 全リトライ失敗時のログ（main にあったガード節の終着点）
+	slog.Error("❌ DB接続に最終失敗しました", "error", lastErr)
+	return nil, fmt.Errorf("database connection failed after %d attempts: %w", maxRetries, lastErr)
 }

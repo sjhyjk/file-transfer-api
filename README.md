@@ -10,11 +10,11 @@
 OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成（oapi-codegen / protoc）による型安全な実装を強制。DIP の徹底によりビジネスロジックをインフラから隔離し、 `go-arch-lint` を用いた **Architecture Testing** により、設計の腐敗を静的に遮断しています。
 
 - **Transport Layer (Echo & gRPC)**: `Echo` および `gRPC` を併用し、共通の Interactor を介したマルチプロトコル・アダプター構成を採用。gRPC では **Reflection API** を有効化し、動的なサービス探索に対応。Middleware/Interceptor による **OIDC 認証** と **Trace ID 注入** を統合し、入り口でのガバナンスを共通化。
-- **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、外部（Repository/Pipeline）との契約となるインターフェースを配置。全レイヤーの依存が向かう「不動の頂点」として定義。
+- **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、インフラの制約から独立した**不変条件（Invariants）**をインターフェースとして定義。全レイヤーの依存が向かう「不動の頂点」として配置しています。
 - **Usecase**: `errgroup` を活用した **Fail-fast な並行処理制御** を実装。。`infra` 層の具象実装を一切参照せず、純粋なビジネスロジック（並行アップロードのオーケストレーション等）に特化。
 - **Infrastructure (Factory Pattern)**: 環境変数に基づき、GCS/Local Storage/S3（予定）、Cloud SQL/In-Memory DB を動的に切り替える **Plug-and-Play** な構成を採用。
 - **cmd (Main Component)**: 依存注入（DI）と起動に特化。API/gRPC/CLI といった実行形態を外部から注入可能にし、コアロジックの再利用性を最大化。
-- **Observability**: `slog` を拡張し、**REST / gRPC 両プロトコルを横断**して Trace ID を伝播。並行処理下でも、リクエスト単位のログ追跡を完全に実現。
+- **Observability**: `slog` を拡張し、**REST / gRPC 両プロトコルを横断**して Trace ID を `context` 経由で伝播。並行処理下でも、リクエスト単位のログ追跡を完全に実現。
 
 ## ⚡ Go の並行処理モデルの実測検証
 
@@ -125,8 +125,9 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   └── openapi.yaml       # REST API (OpenAPI) 仕様書
 ├── cmd/                   # Entry Point (実行環境の決定・DI・起動)
 │   ├── api/
-│   │   └── main.go        # サーバー起動
+│   │   └── main.go        # 本番サーバー起動（slog拡張・DI・gRPC Reflection登録）
 │   └── benchmark/
+│       └── main.go        # 性能比較検証用（Serial vs Parallel 計測ロジック）
 ├── internal/              # Business Logic (クリーンアーキテクチャのコア)
 │   ├── domain/            # Entity & Repository Interface (DIPの起点)
 │   │   ├── file.go        # ファイルの実体（Entity）
@@ -137,12 +138,14 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   │   └── file_interactor_test.go  # ロジックの正当性を保証するテスト
 │   ├── handler/           # 外部接続（HTTPリクエストの解析・レスポンス生成）
 │   │   ├── grpc/          # gRPC ハンドラー実装 & Reflection 制御
-│   │   │   ├── file_handler_grpc.go
+│   │   │   ├── server.go            # gRPC サーバー起動・管理
+│   │   │   ├── file_handler_grpc.go # gRPC ハンドラー本体
 │   │   │   └── pb/        # protoc生成ファイル
 │   │   │       ├── file.pb.go
 │   │   │       └── file_grpc.pb.go
 │   │   └── rest/          # Echo ハンドラー実装
 │   │       ├── file_handler_http.go
+│   │       ├── router.go      # ルーティング・ミドルウェア設定
 │   │       ├── api.gen.go     # OpenAPIから自動生成されたボイラープレート
 │   │       └── appmiddleware/ # アプリ固有のミドルウェア（Trace ID注入等）
 │   │           └── trace.go   # Trace ID注入等の共通前処理
@@ -159,6 +162,7 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   │       └── inmemory/  # 高速な検証を可能にするインメモリDB実装
 │   │           └── memory_repository.go
 │   └── pkg/               # ユーティリティ・基盤共通パッケージ
+│       ├── config/        # 設定ロード (config.go)
 │       └── logger/        # 構造化ログ（slog）基盤。Trace IDの伝播を管理
 │           ├── context.go
 │           └── handler.go
