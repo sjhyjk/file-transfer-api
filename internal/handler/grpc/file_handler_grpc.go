@@ -80,7 +80,7 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 
 	// 4. 既存の Usecase を呼び出す
 	// ストリームから流れてくる pr (io.Reader) をそのまま domain.File に渡す
-	f, err = domain.NewFile(meta.Filename, meta.ExpectedSize, pr)
+	f, err := domain.NewFile(meta.Filename, meta.ExpectedSize, pr)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid metadata: %v", err)
 	}
