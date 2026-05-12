@@ -34,8 +34,7 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 	meta := req.GetMetadata()
 	// 🚀 クライアントから送られた期待サイズを検証
 	// domain.NewFile 内で「1GB以上はエラー」等のロジックを動かす
-	f, err := domain.NewFile(meta.Filename, meta.ExpectedSize, pr)
-	if err != nil {
+	if _, err := domain.NewFile(meta.Filename, meta.ExpectedSize, pr); err != nil {
 		return status.Errorf(codes.InvalidArgument, "Validation failed: %v", err)
 	}
 
@@ -81,7 +80,7 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 
 	// 4. 既存の Usecase を呼び出す
 	// ストリームから流れてくる pr (io.Reader) をそのまま domain.File に渡す
-	f, err = domain.NewFile(meta.Filename, 0, pr) // サイズ不明の場合は 0 またはメタデータから取得
+	f, err = domain.NewFile(meta.Filename, meta.ExpectedSize, pr)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid metadata: %v", err)
 	}

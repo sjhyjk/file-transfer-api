@@ -37,7 +37,9 @@ func (p *PythonPipeline) NotifyNewFile(ctx context.Context, meta *domain.FileMet
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("python rag returned status: %d", resp.StatusCode)
