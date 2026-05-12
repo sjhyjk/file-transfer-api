@@ -108,4 +108,7 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
         size: { type: integer }
+        status: { type: string, enum: [pending, processing, completed, failed] }
+        source: { type: string }
         tags: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }

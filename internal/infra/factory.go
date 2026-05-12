@@ -12,6 +12,7 @@ import (
 	"file-transfer-api/internal/domain"
 	"file-transfer-api/internal/infra/gcs"
 	"file-transfer-api/internal/infra/local"
+	"file-transfer-api/internal/infra/pipeline"
 	"file-transfer-api/internal/infra/repository/inmemory"
 	"file-transfer-api/internal/infra/sql"
 	"file-transfer-api/internal/pkg/config"
@@ -91,4 +92,16 @@ func NewMetadataRepository(ctx context.Context, fs embed.FS) (domain.MetadataRep
 
 	// 呼び出し側で close できるように cleanup 関数を返す
 	return repo, func() { repo.Close() }, nil
+}
+
+func NewDataPipeline(ctx context.Context, cfg *config.Config) (domain.DataPipeline, error) {
+	// 環境変数などで Python 側の URL を取得できるようにする
+	pythonURL := os.Getenv("PYTHON_RAG_URL")
+	if pythonURL == "" {
+		// 開発用デフォルト
+		pythonURL = "http://localhost:8000/ingest"
+	}
+
+	slog.InfoContext(ctx, "Initializing Python RAG Pipeline", "url", pythonURL)
+	return pipeline.NewPythonPipeline(pythonURL), nil
 }

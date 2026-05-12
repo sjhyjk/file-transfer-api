@@ -2,6 +2,7 @@
 API_SPEC = api/openapi.yaml
 API_GEN  = internal/handler/api.gen.go
 API_CONFIG = api/config.yaml
+API_PROTO = api/proto/file.proto
 
 .PHONY: help
 help: ## ヘルプを表示
@@ -12,6 +13,15 @@ gen-api: ## OpenAPIからGoのコードを自動生成
 	@echo "🚀 Generating Go code from $(API_SPEC)..."
 	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen -config $(API_CONFIG) $(API_SPEC)
 	@echo "✨ Generation completed: $(API_GEN)"
+
+.PHONY: gen-proto
+gen-proto: ## gRPC のコードを正しい位置に生成
+	@echo "🚀 Generating gRPC code from $(API_PROTO)..."
+	protoc --proto_path=. \
+		--go_out=. --go_opt=module=file-transfer-api \
+		--go-grpc_out=. --go-grpc_opt=module=file-transfer-api \
+		$(API_PROTO)
+	@echo "✨ Generation completed"
 
 # --- [将来のための備え] ---
 # 開発スピードを上げたい、またはインターネット環境なしで生成したい場合は以下を使用

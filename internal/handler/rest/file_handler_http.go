@@ -4,10 +4,14 @@ package rest
 
 import (
 	"file-transfer-api/internal/domain"
+	"file-transfer-api/internal/handler"
+	"fmt"
 	"log/slog"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // 1. 構造体の定義（ServerInterfaceを実装する）
@@ -25,7 +29,7 @@ func NewHTTPFileHandler(interactor domain.FileUseCase) *HTTPFileHandler {
 // 🚀 自動生成されたインターフェース（ListFiles）を実装する形になります
 // GetFiles は OpenAPI の operationId: getFiles に対応して自動で呼ばれます
 // tags や params は定義済み型として渡されるので、strconv.Atoi は不要になります！
-func (h *HTTPFileHandler) ListFiles(ctx echo.Context, params ListFilesParams) error {
+func (h *HTTPFileHandler) ListFiles(ctx echo.Context, params handler.ListFilesParams) error {
 	// params.Limit には、すでに int 型で値が入っています。
 	// もし limit に文字列が送られてきたら、このメソッドが呼ばれる前に
 	// ライブラリ側で 400 Bad Request を返してくれます。
@@ -49,16 +53,37 @@ func (h *HTTPFileHandler) ListFiles(ctx echo.Context, params ListFilesParams) er
 	// 3. ロジック実行
 	// 🚀 注目：params.Limit や params.Tags は自動で型変換済み
 	// Usecaseの呼び出し
-	files, err := h.interactor.FetchMetadataList(ctx.Request().Context(), tags, limit, 0)
+	domainFiles, err := h.interactor.FetchMetadataList(rCtx, tags, limit, 0)
 	if err != nil {
-		// エラーハンドリング
-		slog.ErrorContext(rCtx, "Failed to fetch metadata list", "error", err)
 		return ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
 	}
 
+	// 🚀 ポイント：domain 層の型を handler 層（OpenAPI生成型）へ詰め替える
+	// これにより、API仕様外の内部データ（UpdatedAtなど）を隠蔽する役割も果たします。
+	resp := make([]handler.FileMetadata, len(domainFiles))
+	for i, f := range domainFiles {
+		// 1. IDの変換 (int64 -> UUIDポインタ)
+		// OpenAPIがUUID型を期待しているので、形式を合わせる必要があります
+		idStr := fmt.Sprintf("%08x-0000-0000-0000-%012x", 0, f.ID) // 暫定的なUUID化
+		u, _ := uuid.Parse(idStr)                                  // 標準的な google/uuid でパース
+		parsedUUID := openapi_types.UUID(u)
+
+		// 2. 基本型のポインタ詰め替え
+		fileName := f.FileName
+		fileSize := int(f.FileSize)
+		status := handler.FileMetadataStatus(f.Status) // ドメインのStatusをAPIのEnum型にキャスト
+
+		resp[i] = handler.FileMetadata{
+			Id:     &parsedUUID,
+			Name:   &fileName, // FileName ではなく Name (OpenAPIの定義通り)
+			Size:   &fileSize,
+			Status: &status,
+			Tags:   &f.Tags,
+		}
+	}
+
 	// 4. レスポンス（ヘッダー設定も自動）
-	// 🚀 json.Encode を手書きする必要がなくなり、1行で終わります
-	return ctx.JSON(http.StatusOK, files)
+	return ctx.JSON(http.StatusOK, resp)
 }
 
 // 3. 他のメソッド（GetHealth, UploadFile）も同様に「器」だけ作ります

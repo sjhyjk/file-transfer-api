@@ -31,12 +31,15 @@ func NewFile(name string, size int64, content io.Reader) (*File, error) {
 }
 
 // FileMetadata を生成するビジネスルールをドメインモデルに持たせる
-func (f *File) ToMetadata(source string) *FileMetadata {
+func (f *File) ToMetadata(source string, tags ...string) *FileMetadata {
+	if len(tags) == 0 {
+		tags = []string{"auto-generated"} // デフォルトタグなど
+	}
 	return &FileMetadata{
 		FileName: f.Name,
 		FileSize: f.Size,
-		Status:   StatusCompleted,
+		Status:   StatusPending,
 		Source:   source,
-		Tags:     []string{"auto-generated"}, // デフォルトタグなど
+		Tags:     tags,
 	}
 }

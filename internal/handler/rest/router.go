@@ -4,6 +4,7 @@ package rest
 
 import (
 	"file-transfer-api/internal/domain"
+	"file-transfer-api/internal/handler"
 	"file-transfer-api/internal/handler/rest/appmiddleware"
 	"fmt"
 	"log/slog"
@@ -35,7 +36,7 @@ func NewRouter(interactor domain.FileUseCase, metadataRepo domain.MetadataReposi
 	// ハンドラー登録
 	// これにより YAML で定義した /files, /upload 等が紐付きます
 	h := NewHTTPFileHandler(interactor)
-	RegisterHandlers(e, h)
+	handler.RegisterHandlers(e, h)
 
 	// ヘルスチェック (OpenAPI外の自由なルート)
 	e.GET("/health", func(c echo.Context) error {

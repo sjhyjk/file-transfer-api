@@ -47,7 +47,7 @@ func (r *Repository) Close() {
 }
 
 // SaveMetadata はファイル情報を PostgreSQL に保存します
-// SaveMetadata は domain.MetadataRepository インターフェースの要件を満たす必要があります
+// SaveMetadata を「更新（UPSERT）」に進化させる
 func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) error {
 	// ★ 追加：レシーバーが nil の場合はエラーを返す（panic防止）
 	if r == nil || r.Pool == nil {
@@ -59,7 +59,11 @@ func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) e
 
 	query := `
         INSERT INTO file_metadata (file_name, file_size, status, source, tags)
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (id) DO UPDATE SET
+            status = EXCLUDED.status,
+            tags = EXCLUDED.tags,
+            updated_at = CURRENT_TIMESTAMP
         RETURNING id, created_at;
     `
 
@@ -92,7 +96,33 @@ func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) e
 // 🚀 重要: インターフェースが "Create" という名前を求めている場合
 // Create は SaveMetadata と同じ役割として実装します
 func (r *Repository) Create(ctx context.Context, record *domain.FileMetadata) error {
-	return r.SaveMetadata(ctx, record)
+	if r == nil || r.Pool == nil {
+		return fmt.Errorf("database repository is not initialized")
+	}
+
+	slog.DebugContext(ctx, "Executing INSERT metadata", "file_name", record.FileName)
+
+	query := `
+        INSERT INTO file_metadata (file_name, file_size, status, source, tags)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, created_at;
+    `
+
+	err := r.Pool.QueryRow(ctx, query,
+		record.FileName,
+		record.FileSize,
+		record.Status,
+		record.Source,
+		record.Tags,
+	).Scan(&record.ID, &record.CreatedAt)
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Database insert failed", "file_name", record.FileName, "error", err)
+		return fmt.Errorf("failed to create metadata: %w", err)
+	}
+
+	slog.InfoContext(ctx, "Metadata created successfully", "db_id", record.ID, "file_name", record.FileName)
+	return nil
 }
 
 // 🚀 重要: インターフェースが UpdateStatus を求めている場合

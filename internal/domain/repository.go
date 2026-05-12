@@ -31,10 +31,13 @@ type FileSearchQuery struct {
 // MetadataRepository はDB永続化の抽象化
 // 基盤エンジニアとして、特定のDB（Postgres等）に依存しないビジネスロジックを記述するために定義します。
 type MetadataRepository interface {
+	// 1. 最初の作成（IDを発行し、ステータスを Pending にする）
+	Create(ctx context.Context, record *FileMetadata) error
+
+	// 2. 途中経過や最終結果の保存（冪等性を持たせた更新）
 	// SaveMetadata は新規レコードをDBに保存し、生成されたIDと作成日時を構造体に反映します。
 	SaveMetadata(ctx context.Context, metadata *FileMetadata) error
-	// 保存（新規作成）
-	Create(ctx context.Context, record *FileMetadata) error
+
 	// 状態更新（完了・失敗など）
 	UpdateStatus(ctx context.Context, id int64, status TransferStatus) error
 	// IDによる取得
@@ -45,7 +48,7 @@ type MetadataRepository interface {
 
 // DataPipeline (RAG等の外部通知用)
 type DataPipeline interface {
-	NotifyNewFile(ctx context.Context, fileName string) error
+	NotifyNewFile(ctx context.Context, meta *FileMetadata) error
 }
 
 // FileUseCase (アプリケーション層への入り口)

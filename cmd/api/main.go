@@ -39,6 +39,7 @@ func main() {
 	var (
 		fileRepo     domain.FileRepository
 		metadataRepo domain.MetadataRepository
+		dataPipeline domain.DataPipeline
 		err          error
 		dbCleanup    func() // 変数名を具体的にして重複回避
 	)
@@ -71,13 +72,19 @@ func main() {
 	}
 	defer storageCleanup()
 
+	// --- 2.3 パイプライン（Python通知）層 --- ★ 追加
+	dataPipeline, err = infra.NewDataPipeline(ctx, cfg)
+	if err != nil {
+		slog.Error("failed to init pipeline", "error", err)
+		// 通知が必須でないなら Exit しなくても良いが、今回は繋いでおく
+	}
+
 	// ---------------------------------------------------------
 	// [3] アプリケーション層（ドメインロジック）の構築
 	// ---------------------------------------------------------
 
-	// 3. ユースケースの初期化（具体的な実装をインターフェースに注入）
-	// これにより、usecase側には「実体(infra)が何か」を隠したまま「機能(interface)」だけを渡せます
-	interactor := usecase.NewFileInteractor(fileRepo, metadataRepo, nil)
+	// 3. ユースケースの初期化
+	interactor := usecase.NewFileInteractor(fileRepo, metadataRepo, dataPipeline)
 
 	// =========================================================
 	// 🚀 [4] 各プロトコルサーバーの起動

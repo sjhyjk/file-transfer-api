@@ -33,7 +33,10 @@ func (m *benchMockRepo) Delete(ctx context.Context, n string) error {
 // 2. DB（Metadata）用モック
 type benchMockMetaRepo struct{}
 
-func (m *benchMockMetaRepo) Create(ctx context.Context, r *domain.FileMetadata) error { return nil }
+func (m *benchMockMetaRepo) Create(ctx context.Context, r *domain.FileMetadata) error {
+	r.ID = 123 // モックとしてIDを割り振るシミュレーション
+	return nil
+}
 func (m *benchMockMetaRepo) SaveMetadata(ctx context.Context, r *domain.FileMetadata) error {
 	return nil
 }
@@ -41,12 +44,12 @@ func (m *benchMockMetaRepo) UpdateStatus(ctx context.Context, id int64, s domain
 	return nil
 }
 func (m *benchMockMetaRepo) FindByID(ctx context.Context, id int64) (*domain.FileMetadata, error) {
-	return nil, nil
+	return &domain.FileMetadata{ID: id, Status: domain.StatusCompleted}, nil
 }
 
 // モックの FindAll を新しいシグネチャに修正
 func (m *benchMockMetaRepo) FindAll(ctx context.Context, q domain.FileSearchQuery) ([]*domain.FileMetadata, error) {
-	return nil, nil
+	return []*domain.FileMetadata{}, nil
 }
 
 func BenchmarkUploadMultipleParallel(b *testing.B) { // *testing.B に修正

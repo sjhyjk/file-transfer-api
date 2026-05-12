@@ -18,6 +18,7 @@ type FileInteractor struct {
 	repo         domain.FileRepository
 	metadataRepo domain.MetadataRepository // ★ DB用
 	pipeline     domain.DataPipeline       // ★ RAGなど後続処理への通知用
+	bucketName   string
 }
 
 func NewFileInteractor(repo domain.FileRepository, metadataRepo domain.MetadataRepository, pipeline domain.DataPipeline) *FileInteractor {
@@ -39,9 +40,15 @@ func (i *FileInteractor) UploadSingle(ctx context.Context, name string, size int
 		return err
 	}
 
-	// ★ 保存成功後、パイプラインに通知
-	if i.pipeline != nil {
-		return i.pipeline.NotifyNewFile(ctx, file.Name)
+	meta := file.ToMetadata("manual_upload") // domain.File から Metadata を生成
+	if err := i.metadataRepo.Create(ctx, meta); err != nil {
+		return err
+	}
+
+	// DB保存成功後、IDが入った meta を渡す
+	if err := i.pipeline.NotifyNewFile(ctx, meta); err != nil {
+		slog.WarnContext(ctx, "Notification failed", "error", err)
+		// 通知の失敗でアップロード自体をエラーにするかは要件次第
 	}
 	return nil
 }
@@ -58,33 +65,42 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 		// Go 1.22未満の場合は必要ですが、最新なら不要です
 
 		eg.Go(func() error {
-			slog.InfoContext(ctx, "🚀 [Parallel] アップロード開始", "file_name", f.Name)
 
-			// 1. Storage（GCS）への保存
-			if err := i.repo.Save(egCtx, f.Name, f.Content); err != nil {
-				return fmt.Errorf("%s のアップロード失敗: %w", f.Name, err)
-			}
-
-			// 2. ★ DB（Cloud SQL）へのメタデータ保存 ★
+			// 1. DBに「Pending」状態でレコードを先行作成 (Create)
+			// ★ DB（Cloud SQL）へのメタデータ保存 ★
 			meta := f.ToMetadata("parallel-upload")
+			meta.Status = domain.StatusPending // 明示的にPendingに
 
 			if i.metadataRepo != nil {
-				if err := i.metadataRepo.SaveMetadata(egCtx, meta); err != nil {
-					// ★ ロールバック（補償トランザクション）
-					// egCtx はキャンセルされている可能性があるため、Background を使うのが安全です
-					// ロールバック処理にはキャンセルされていない context.Background() を使うのがコツです
-					rollbackCtx := context.Background()
-					_ = i.repo.Delete(rollbackCtx, f.Name)
-
-					return fmt.Errorf("%s のメタデータ保存失敗: %w", f.Name, err)
+				if err := i.metadataRepo.Create(egCtx, meta); err != nil {
+					return fmt.Errorf("%s: metadata creation failed: %w", f.Name, err)
 				}
 			}
 
-			// 3. パイプライン通知
+			slog.InfoContext(ctx, "🚀 [Parallel] アップロード開始", "file_name", f.Name)
+
+			// 2. Storage（GCS/Local）への保存
+			if err := i.repo.Save(egCtx, f.Name, f.Content); err != nil {
+				// 補償トランザクション: DBの状態を Failed に更新（または削除）
+				rollbackCtx := context.Background()
+				_ = i.metadataRepo.UpdateStatus(rollbackCtx, meta.ID, domain.StatusFailed)
+				return fmt.Errorf("%s のアップロード失敗: %w", f.Name, err)
+			}
+
+			// 3. DBのステータスを「Completed」に更新 (UpdateStatus)
+			if i.metadataRepo != nil {
+				if err := i.metadataRepo.UpdateStatus(egCtx, meta.ID, domain.StatusCompleted); err != nil {
+					return fmt.Errorf("%s: failed to update status to completed: %w", f.Name, err)
+				}
+			}
+
+			// 4. パイプライン通知
 			// ★ 保存に成功したら、即座にパイプラインへ通知を開始する
 			if i.pipeline != nil {
-				if err := i.pipeline.NotifyNewFile(egCtx, f.Name); err != nil {
-					return fmt.Errorf("%s の通知失敗: %w", f.Name, err)
+				// 通知の失敗で全体のアップロードをロールバックさせないよう、
+				// エラーはログに留めるか、非同期でリトライキューに入れるのが一般的
+				if err := i.pipeline.NotifyNewFile(egCtx, meta); err != nil {
+					slog.WarnContext(egCtx, "Pipeline notification failed, but upload is complete", "file", f.Name, "error", err)
 				}
 			}
 
@@ -150,4 +166,21 @@ func (i *FileInteractor) UploadMultipleSerial(ctx context.Context, files []*doma
 		fmt.Printf("✅ [Serial] アップロード完了: %s\n", f.Name)
 	}
 	return nil
+}
+
+// NotifyNewFile はファイルアップロード完了後に Python RAG 側へ通知を飛ばします。
+func (i *FileInteractor) NotifyNewFile(ctx context.Context, meta *domain.FileMetadata) error {
+	// 実際の実装では i.httpClient (後述) などを使って POST します
+	payload := map[string]interface{}{
+		"file_id":   meta.ID,
+		"file_name": meta.FileName,
+		"gcs_path":  fmt.Sprintf("gs://%s/%s", i.bucketName, meta.FileName),
+		"tags":      meta.Tags,
+	}
+
+	slog.InfoContext(ctx, "Sending notification to Python RAG", "payload", payload)
+
+	// ここで実際に HTTP POST を実行
+	// return i.httpClient.Post(...)
+	return i.pipeline.NotifyNewFile(ctx, meta) // インターフェース経由で呼ぶ
 }

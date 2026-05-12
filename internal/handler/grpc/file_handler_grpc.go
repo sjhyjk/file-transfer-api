@@ -32,11 +32,17 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 		return err
 	}
 	meta := req.GetMetadata()
+	// 🚀 クライアントから送られた期待サイズを検証
+	// domain.NewFile 内で「1GB以上はエラー」等のロジックを動かす
+	f, err := domain.NewFile(meta.Filename, meta.ExpectedSize, pr)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "Validation failed: %v", err)
+	}
 
 	// ✨ リクエスト開始のログ（コンテキストの付与）
 	slog.Info("gRPC upload stream started",
 		"filename", meta.Filename,
-		"trace_id", stream.Context().Value("trace_id"), // 永田さんの slog 拡張に合わせたキー
+		"trace_id", stream.Context().Value("trace_id"), // slog 拡張に合わせたキー
 	)
 
 	// 3. 非同期でストリームを読み込み、パイプに書き込む
@@ -75,7 +81,7 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 
 	// 4. 既存の Usecase を呼び出す
 	// ストリームから流れてくる pr (io.Reader) をそのまま domain.File に渡す
-	f, err := domain.NewFile(meta.Filename, 0, pr) // サイズ不明の場合は 0 またはメタデータから取得
+	f, err = domain.NewFile(meta.Filename, 0, pr) // サイズ不明の場合は 0 またはメタデータから取得
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid metadata: %v", err)
 	}

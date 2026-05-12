@@ -15,6 +15,7 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 - **Infrastructure (Factory Pattern)**: 環境変数に基づき、GCS/Local Storage/S3（予定）、Cloud SQL/In-Memory DB を動的に切り替える **Plug-and-Play** な構成を採用。
 - **cmd (Main Component)**: 依存注入（DI）と起動に特化。API/gRPC/CLI といった実行形態を外部から注入可能にし、コアロジックの再利用性を最大化。
 - **Observability**: `slog` を拡張し、**REST / gRPC 両プロトコルを横断**して Trace ID を `context` 経由で伝播。並行処理下でも、リクエスト単位のログ追跡を完全に実現。
+- **Ingest Pipeline (External Integration)**: ファイルのライフサイクル（保存完了）をトリガーとした外部通知基盤を構築。DIPに基づき `domain` 層で定義されたインターフェースを介して、Python RAG基盤等の外部システムと疎結合に連携します。
 
 ## ⚡ Go の並行処理モデルの実測検証
 
@@ -107,10 +108,12 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
   - **Handler Layer の分離**: 同一の Interactor (Usecase) を Echo (REST) と gRPC の両ハンドラで共用。プロトコル非依存の純粋なビジネスロジックを隔離。
   - **共通基盤の統合**: HTTP Middleware と gRPC Interceptor で共通の Trace ID 伝播・ログ・エラーハンドリングを実現。
 
-## 🛠 今後の検証ロードマップ
+- [x] **RAG / データインジェスト基盤への統合（通知パイプライン）** 🎉 *Done*
+  - **イベント駆動型通知**: ファイル保存完了をトリガーに、外部（Python RAG基盤等）へメタデータを即時通知する `http_notifier` を実装。
+  - **ライフサイクル管理**: `FileMetadata` に `Status` (Pending/Processing/Completed/Failed) を導入。非同期なデータ処理状態の追跡を可能に。
+  - **プロバナンス（由来）情報の保持**: `Source` フィールドを追加し、RAG における回答精度の向上に不可欠な「情報のソース追跡」をスキーマレベルでサポート。
 
-- [ ] **RAG / データインジェスト基盤への統合**
-  - 本基盤を前処理パイプラインとして活用し、イベント駆動（Pub/Sub）による非同期なデータ処理連鎖の実装。
+## 🛠 今後の検証ロードマップ
 
 - [ ] **言語横断的な gRPC スキーマ統制 (Polyglot Governance)**
   - Python (AsyncIO) クライアントからの接続検証。RAG パイプラインにおけるメタデータ受け渡しを想定した性能比較。
@@ -125,9 +128,9 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   └── openapi.yaml       # REST API (OpenAPI) 仕様書
 ├── cmd/                   # Entry Point (実行環境の決定・DI・起動)
 │   ├── api/
-│   │   └── main.go        # 本番サーバー起動（slog拡張・DI・gRPC Reflection登録）
+│   │   └── main.go        # 本番サーバー起動（DI、gRPC/REST並行起動）
 │   └── benchmark/
-│       └── main.go        # 性能比較検証用（Serial vs Parallel 計測ロジック）
+│       └── main.go        # 性能比較検証用（Serial vs Parallel 計測）
 ├── internal/              # Business Logic (クリーンアーキテクチャのコア)
 │   ├── domain/            # Entity & Repository Interface (DIPの起点)
 │   │   ├── file.go        # ファイルの実体（Entity）
@@ -137,23 +140,25 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   │   ├── file_interactor.go       # 並行アップロードのコアロジック
 │   │   └── file_interactor_test.go  # ロジックの正当性を保証するテスト
 │   ├── handler/           # 外部接続（HTTPリクエストの解析・レスポンス生成）
+│   │   ├── api.gen.go     # OpenAPIから自動生成されたボイラープレート
 │   │   ├── grpc/          # gRPC ハンドラー実装 & Reflection 制御
 │   │   │   ├── server.go            # gRPC サーバー起動・管理
 │   │   │   ├── file_handler_grpc.go # gRPC ハンドラー本体
 │   │   │   └── pb/        # protoc生成ファイル
 │   │   │       ├── file.pb.go
 │   │   │       └── file_grpc.pb.go
-│   │   └── rest/          # Echo ハンドラー実装
+│   │   └── rest/          # Echo (REST) ハンドラー
 │   │       ├── file_handler_http.go
 │   │       ├── router.go      # ルーティング・ミドルウェア設定
-│   │       ├── api.gen.go     # OpenAPIから自動生成されたボイラープレート
 │   │       └── appmiddleware/ # アプリ固有のミドルウェア（Trace ID注入等）
 │   │           └── trace.go   # Trace ID注入等の共通前処理
 │   ├── infra/             # Infrastructure Adapters (技術的詳細の実装)
 │   │   ├── factory.go     # インフラ切り替えの司令塔
-│   │   ├── gcs/           # GCS 具象実装（Workload Identity 対応）
+│   │   ├── pipeline/      # External Integration (RAG基盤等へのイベント通知)
+│   │   |   └── http_notifier.go  # Python API への HTTP 通知実装
+│   │   ├── gcs/           # GCS 具象実装（Workload Identity 対応） (STORAGE_TYPE=GCS)
 │   │   |   └── gcs_repository.go
-│   │   ├── local/         # ローカルファイルシステム実装
+│   │   ├── local/         # ローカルファイルシステム実装 (STORAGE_TYPE=LOCAL)
 │   │   |   └── local_repository.go
 │   │   ├── sql/           # Cloud SQL (PostgreSQL) 永続化・マイグレーション
 │   │   |   ├── db.go         # コネクション・CRUD実装
@@ -169,8 +174,8 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 ├── tools/                 # 開発ツールの依存関係管理
 │   └── tools.go           # ビルドツールのバージョンを固定するための Go ファイル
 ├── migrations/            # DB スキーマ管理 (SQLファイル)
-│   ├── 000001_create_files_table.up.sql
-│   ├── 000001_create_files_table.down.sql
+│   ├── 000001_create_file_metadata_table.up.sql
+│   ├── 000001_create_file_metadata_table.down.sql
 │   ├── 000002_add_gin_index_to_tags.up.sql
 │   └── 000002_add_gin_index_to_tags.down.sql
 ├── terraform/             # Infrastructure as Code (GCPリソース定義)
