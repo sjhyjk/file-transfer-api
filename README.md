@@ -113,6 +113,10 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
   - **ライフサイクル管理**: `FileMetadata` に `Status` (Pending/Processing/Completed/Failed) を導入。非同期なデータ処理状態の追跡を可能に。
   - **プロバナンス（由来）情報の保持**: `Source` フィールドを追加し、RAG における回答精度の向上に不可欠な「情報のソース追跡」をスキーマレベルでサポート。
 
+- [x] Polyglot Communication (Go ↔ Python 連携) 🎉 Done
+  - **マルチ言語構成**: Go（API）と Python（RAG Mock）を Docker Compose ネットワーク内で統合。`http_notifier` による言語間通信の実証を完遂。
+  - **コンテナオーケストレーション**: `depends_on` による起動順序制御と、ネットワークエイリアスを用いたサービス間名前解決を確立。
+
 ## 🛠 今後の検証ロードマップ
 
 - [ ] **言語横断的な gRPC スキーマ統制 (Polyglot Governance)**
@@ -171,6 +175,11 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │       └── logger/        # 構造化ログ（slog）基盤。Trace IDの伝播を管理
 │           ├── context.go
 │           └── handler.go
+├── python_rag_mock/       # Python RAG 基盤のモックサーバー
+│   ├── pb/                # Python 用 gRPC 生成コード
+│   ├── Dockerfile         # Python 実行環境のコンテナ定義
+│   ├── main.py            # FastAPI による通知受付エンドポイント
+│   └── requirements.txt   # Python 依存ライブラリ
 ├── tools/                 # 開発ツールの依存関係管理
 │   └── tools.go           # ビルドツールのバージョンを固定するための Go ファイル
 ├── migrations/            # DB スキーマ管理 (SQLファイル)
@@ -186,13 +195,13 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   └── docker-build.yml   # 自動コンテナビルド定義
 ├── assets.go              # プロジェクト共通資産（SQL等）の embed 定義
 ├── data/                  # テスト用データ（parallel-test-*.txt 等）
-├── docker-compose.yml     # DB・APIの疎結合な依存関係とネットワークを定義
+├── docker-compose.yml     # DB・API, Python Mockの疎結合な依存関係とネットワークを定義
 ├── Dockerfile             # マルチステージビルドによる軽量実行イメージ定義
 ├── .env                   # 環境設定（Git管理対象外）
 ├── .go-arch-lint.yml      # アーキテクチャの依存関係を強制する定義ファイル
 ├── .golangci.yml          # 静的解析ルール定義
 ├── go.mod                 # 依存関係管理
-├── Makefile               # 標準化された開発コマンド (gen-api 等)
+├── Makefile               # 標準化された開発コマンド (Go/Python 両対応)
 ├── README.md              # 本ドキュメント
 │
 ├── python_comparison/     # [In Progress] Python (AsyncIO) との性能比較検証用

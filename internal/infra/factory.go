@@ -36,10 +36,10 @@ func NewStorageRepository(ctx context.Context, cfg *config.Config) (domain.FileR
 	// 1. 生成ロジックのみを switch に書く
 	switch storageType {
 	case "LOCAL":
-		// 🚀 ローカルの /tmp や ./data に保存するリポジトリ
-		// これを作れば GCP が止まっていても API が動かせる！
-		// ディレクトリ `./data` がなければ自動で作るような実装にすると親切です
-		repo = local.NewLocalRepository("./data")
+		path := cfg.LocalStoragePath
+
+		slog.InfoContext(ctx, "Local storage path detected", "path", path)
+		repo = local.NewLocalRepository(path)
 
 	case "S3":
 		// 将来的にここに AWS S3 の初期化を書く

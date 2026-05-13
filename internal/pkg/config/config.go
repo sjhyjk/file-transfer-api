@@ -12,11 +12,12 @@ import (
 // Config はアプリケーション全体の設定を保持する構造体
 // 将来的に「数値のバリデーション」などもここで行えます
 type Config struct {
-	DBURL       string
-	DBType      string
-	StorageType string
-	BucketName  string
-	Port        string
+	DBURL            string
+	DBType           string
+	StorageType      string
+	BucketName       string
+	Port             string
+	LocalStoragePath string
 }
 
 // Load は設定を読み込みます
@@ -27,11 +28,12 @@ func Load() *Config {
 	}
 
 	return &Config{
-		DBURL:       os.Getenv("DATABASE_URL"),
-		DBType:      os.Getenv("DB_TYPE"),
-		StorageType: os.Getenv("STORAGE_TYPE"),
-		BucketName:  getEnv("BUCKET_NAME", "file-transfer-bucket-syou-20240121"),
-		Port:        getEnv("PORT", "8080"),
+		DBURL:            os.Getenv("DATABASE_URL"),
+		DBType:           os.Getenv("DB_TYPE"),
+		StorageType:      os.Getenv("STORAGE_TYPE"),
+		BucketName:       getEnv("BUCKET_NAME", "file-transfer-bucket-syou-20240121"),
+		Port:             getEnv("PORT", "8080"),
+		LocalStoragePath: getEnv("LOCAL_STORAGE_PATH", "/app/storage"),
 	}
 }
 

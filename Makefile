@@ -15,11 +15,25 @@ gen-api: ## OpenAPIからGoのコードを自動生成
 	@echo "✨ Generation completed: $(API_GEN)"
 
 .PHONY: gen-proto
-gen-proto: ## gRPC のコードを正しい位置に生成
+gen-proto: gen-proto-go gen-proto-python ## Go と Python の両方の proto コードを生成
+
+.PHONY: gen-proto-go
+gen-proto-go: ## Go 用の gRPC コードのみを生成
 	@echo "🚀 Generating gRPC code from $(API_PROTO)..."
+	# Go 用
 	protoc --proto_path=. \
 		--go_out=. --go_opt=module=file-transfer-api \
 		--go-grpc_out=. --go-grpc_opt=module=file-transfer-api \
+		$(API_PROTO)
+	@echo "✨ Generation completed"
+
+.PHONY: gen-proto-python
+gen-proto-python: ## Python 用の gRPC コードを生成
+	@echo "🐍 Generating gRPC code for Python..."
+	# Python 用 (grpcio-tools が必要)
+	python3 -m grpc_tools.protoc --proto_path=. \
+		--python_out=./python_rag_mock/pb \
+		--grpc_python_out=./python_rag_mock/pb \
 		$(API_PROTO)
 	@echo "✨ Generation completed"
 

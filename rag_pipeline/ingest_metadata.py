@@ -1,3 +1,5 @@
+# rag_pipline/ingest_metadata.py
+
 # RAGへの投入口としてのインターフェース定義（箱）
 class DataIngestor:
     def __init__(self, bucket_name):
