@@ -2,3 +2,18 @@ fastapi
 uvicorn[standard]
 grpcio
 grpcio-tools
+langchain
+langchain-community
+langchain-openai  # または代替のLLM用ライブラリ
+openpyxl         # Excel用
+python-docx      # Word用
+python-pptx      # PowerPoint用
+pypdf            # PDF抽出用
+python-dotenv
+unstructured    # PPTXやExcelの汎用的な読み込みに必要
+openpyxl        # Excelの解析実体
+docx2txt        # Wordの解析実体
+python-pptx     # PPTXの解析実体
+networkx
+pandas
+msoffcrypto-tool

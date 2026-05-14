@@ -21,7 +21,7 @@ services:
     depends_on:
       db:
         condition: service_healthy # 💡 ポイント3: DBが完全に立ち上がってから起動
-      rag-mock: { condition: service_started }
+      rag-worker: { condition: service_started }
 
   # --- Database (PostgreSQL) ---
   db:
@@ -42,14 +42,17 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
 # --- Python RAG Mock Server ---
-  rag-mock: # 🚀 新設
+  rag-worker: 
     build:
-      context: ./python_rag_mock
+      context: ./python_rag_worker
       dockerfile: Dockerfile
+    volumes:
+      - ./storage:/app/storage:ro # 💡 読み取り専用(ro)でマウント
     ports:
       - "8001:8000"
     environment:
       - LOG_LEVEL=info
+      - STORAGE_ROOT=/app/storage
 
 volumes:
   postgres_data: # DBの中身を消さないためのボリューム

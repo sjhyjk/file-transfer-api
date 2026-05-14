@@ -2,7 +2,7 @@
 
 ![Build Status](https://github.com/sjhyjk/file-transfer-api/actions/workflows/docker-build.yml/badge.svg)
 
-# 📝 プロジェクトの背景と目的
+## 📝 プロジェクトの背景と目的
 <div align="center">
   <h3><b>「インフラへのアプリケーションの埋没」を打破し、ビジネスロジックを解き放つ</b></h3>
 </div>
@@ -14,11 +14,11 @@
 #### 🚩 直面した 3 つの構造的課題
 * **プラットフォーム依存による技術選定の硬直化**: 基盤側の都合でモダンな進化的アーキテクチャが阻害される現状。
 
-* **共有リソース基盤におけるオーケストレーションの限界**: 共通基盤ゆえにテナント個別の要件（断続処理など）を許容できない柔軟性の欠如。
+* **共有リソース基盤におけるオーケストレーションの限界**: 共通基盤ゆえにテナント個別の要件 (断続処理など) を許容できない柔軟性の欠如。
 
 * **脆弱なセキュリティ境界**: 共有ストレージにおける「他テナントのパス推測可能性」という構造的欠陥。
 
-これらを「反面教師」とし、**エンタープライズ基準の厳格な制約下**でも進化可能なポータビリティと、開発者がロジックに集中できる**開発者体験（DevEx）**の両立を、アーキテクチャの力で証明することを目的としています。
+これらを「反面教師」とし、**エンタープライズ基準の厳格な制約下**でも進化可能なポータビリティと、開発者がロジックに集中できる**開発者体験 (DevEx)**の両立を、アーキテクチャの力で証明することを目的としています。
 
 ## 🚀 実装の柱
 
@@ -26,8 +26,8 @@
 OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成（oapi-codegen / protoc）による型安全な実装を強制。DIP の徹底によりビジネスロジックをインフラから隔離し、 `go-arch-lint` を用いた **Architecture Testing** により、設計の腐敗を静的に遮断しています。
 
 - **Transport Layer (Echo & gRPC)**: `Echo` および `gRPC` を併用し、共通の Interactor を介したマルチプロトコル・アダプター構成を採用。gRPC では **Reflection API** を有効化し、動的なサービス探索に対応。Middleware/Interceptor による **OIDC 認証** と **Trace ID 注入** を統合し、入り口でのガバナンスを共通化。
-- **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、インフラの制約から独立した**不変条件（Invariants）**をインターフェースとして定義。全レイヤーの依存が向かう「不動の頂点」として配置しています。
-- **Usecase**: `errgroup` を活用した **Fail-fast な並行処理制御** を実装。。`infra` 層の具象実装を一切参照せず、純粋なビジネスロジック（並行アップロードのオーケストレーション等）に特化。
+- **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、インフラの制約から独立した**不変条件 (Invariants)**をインターフェースとして定義。全レイヤーの依存が向かう「不動の頂点」として配置しています。
+- **Usecase**: `errgroup` を活用した **Fail-fast な並行処理制御** を実装。`infra` 層の具象実装を一切参照せず、純粋なビジネスロジック（並行アップロードのオーケストレーション等）に特化。
 - **Infrastructure (Factory Pattern)**: 環境変数に基づき、GCS/Local Storage/S3（予定）、Cloud SQL/In-Memory DB を動的に切り替える **Plug-and-Play** な構成を採用。
 - **cmd (Main Component)**: 依存注入（DI）と起動に特化。API/gRPC/CLI といった実行形態を外部から注入可能にし、コアロジックの再利用性を最大化。
 - **Observability**: `slog` を拡張し、**REST / gRPC 両プロトコルを横断**して Trace ID を `context` 経由で伝播。並行処理下でも、リクエスト単位のログ追跡を完全に実現。
@@ -137,12 +137,12 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 
 ### Phase 1: RAG 拡張 & イベント駆動コア（最優先）
 
-- [ ] **ドメイン駆動 RAG パイプラインの実装**
+- [x] **ドメイン駆動 RAG パイプラインの実装** 🎉 *Done*
   - ファイル保存をトリガーとした「テキスト抽出 → チャンク分割 → ベクトル化」のフローをドメインイベントとして定義。
   - `python_rag_worker` を真の処理基盤へ昇格させ、非同期的なデータ加工パイプラインを確立。
 
-- [ ] **Pub/Sub 抽象化レイヤーの構築**
-  - GCP Cloud Pub/Sub が利用不可な環境でも、インメモリや Redis に差し替え可能なメッセージング・インターフェースの実装。
+- [ ] **イベント駆動アーキテクチャの導入 (Pub/Sub 抽象化)**
+  - Pub/Sub を基盤としたメッセージングモデルの定義。
 
 ### Phase 2: エンタープライズ・リライアビリティ
 
@@ -155,7 +155,7 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 ### Phase 3: プラットフォーム・ガバナンス & DevEx
 
 - [ ] **マルチテナント隔離の完全防衛**
-  - ファイルパスの難読化（UUID）とメタデータ紐付けによる、他テナントからの「パス推測」を完全に遮断するストレージアダプターの実装。
+  - 物理ストレージパスの隠蔽とアクセス認可（IDOR対策）とメタデータ紐付けによる、他テナントからの「パス推測」を完全に遮断するストレージアダプターの実装。
 
 - [ ] **OpenTelemetry による分散トレーシングの高度化**
   - Go と Python を跨ぐリクエストの可視化、およびテナントごとのリソース消費メトリクスの露出。
@@ -182,7 +182,7 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   │   ├── repository.go  # 保存(Repo)と通知(Pipeline)の定義
 │   │   └── metadata.go    # RAG連携用の属性定義
 │   ├── usecase/           # Business Logic (並行処理・制御フロー)
-│   │   ├── file_interactor.go       # 並行アップロードのコアロジック
+│   │   ├── file_interactor.go       # Goの並行アップロードのコアロジック
 │   │   └── file_interactor_test.go  # ロジックの正当性を保証するテスト
 │   ├── handler/           # 外部接続（HTTPリクエストの解析・レスポンス生成）
 │   │   ├── api.gen.go     # OpenAPIから自動生成されたボイラープレート
@@ -218,10 +218,22 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │           └── handler.go
 |
 ├── python_rag_worker/     # Python RAG 基盤
-│   ├── app/                # Python 用 gRPC 生成コード
-│   |   ├── services/
-│   |   │   └── ingestor.py 
-│   |   └── main.py        # FastAPI のエントリポイント
+│   ├── app/               # アプリケーションの構成とDIの起点
+│   |   ├── main.py        # FastAPI のエントリポイント（DIの実施）
+│   |   ├── api/           # ハンドラー層（HTTPリクエストの解釈）
+│   |   │   └── routes.py            # 通信（通知の受付）
+│   |   ├── infra/                   # インフラ層（外部ライブラリの実装詳細）
+│   |   │   ├── extractors/          # 形式ごとの抽出器を格納
+│   |   │   │   ├── base.py          # 共通インターフェース
+│   |   │   │   ├── excel_extractor.py
+│   |   │   │   ├── pdf_extractor.py 
+│   |   │   │   ├── pptx_extractor.py
+│   |   │   │   ├── text_extractor.py
+│   |   │   │   └── word_extractor.py 
+│   |   │   ├── extractor_factory.py # 形式判定と振り分け
+│   |   │   └── chunker.py           # チャンク分割
+│   |   └── services/                # ユースケース・ドメイン層（パイプラインの定義）
+│   |       └── rag_service.py       # オーケストレーション（全体の流れを制御）
 │   ├── pb/                # Python 用 gRPC 生成コード
 │   ├── Dockerfile         # Python 実行環境のコンテナ定義
 │   └── requirements.txt   # Python 依存ライブラリ
@@ -244,13 +256,13 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 ├── docker-compose.yml     # DB・API, Python Mockの疎結合な依存関係とネットワークを定義
 ├── Dockerfile             # マルチステージビルドによる軽量実行イメージ定義
 ├── .env                   # 環境設定（Git管理対象外）
-├── .go-arch-lint.yml      # アーキテクチャの依存関係を強制する定義ファイル
+├── .go-arch-lint.yml      # クリーンアーキテクチャの依存方向を強制する Lint 定義
 ├── .golangci.yml          # 静的解析ルール定義
 ├── go.mod                 # 依存関係管理
 ├── Makefile               # 標準化された開発コマンド (Go/Python 両対応)
 ├── README.md              # 本ドキュメント
 │
-├── python_comparison/     # [In Progress] Python (AsyncIO) との性能比較検証用
+├── python_comparison/     # [In Progress] Go (Parallel) vs Python (AsyncIO) のスループット・メモリ効率比較検証
 └── aws_infrastructure/    # [In Progress] マルチクラウド (S3) 展開用の設計検討
 ```
 
