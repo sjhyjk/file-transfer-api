@@ -2,7 +2,23 @@
 
 ![Build Status](https://github.com/sjhyjk/file-transfer-api/actions/workflows/docker-build.yml/badge.svg)
 
-本プロジェクトは、Goの並行処理モデル（Concurrency）とクリーンアーキテクチャ（Clean Architecture）の設計思想の習得を目的とした、クラウドストレージ転送基盤の技術検証リポジトリです。**並行処理によるスループットの最大化**を実証しつつ、**静的解析によるアーキテクチャの強制**を導入することで、インフラの制約に縛られない高度なポータビリティと保守性を両立しています。
+# 📝 プロジェクトの背景と目的
+<div align="center">
+  <h3><b>「インフラへのアプリケーションの埋没」を打破し、ビジネスロジックを解き放つ</b></h3>
+</div>
+
+---
+
+本プロジェクトの原点は、現職の金融基盤で直面した**「インフラ制約によるビジネス要件の断念」**という強い課題意識にあります。
+
+#### 🚩 直面した 3 つの構造的課題
+* **プラットフォーム依存による技術選定の硬直化**: 基盤側の都合でモダンな進化的アーキテクチャが阻害される現状。
+
+* **共有リソース基盤におけるオーケストレーションの限界**: 共通基盤ゆえにテナント個別の要件（断続処理など）を許容できない柔軟性の欠如。
+
+* **脆弱なセキュリティ境界**: 共有ストレージにおける「他テナントのパス推測可能性」という構造的欠陥。
+
+これらを「反面教師」とし、**エンタープライズ基準の厳格な制約下**でも進化可能なポータビリティと、開発者がロジックに集中できる**開発者体験（DevEx）**の両立を、アーキテクチャの力で証明することを目的としています。
 
 ## 🚀 実装の柱
 
@@ -113,14 +129,39 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
   - **ライフサイクル管理**: `FileMetadata` に `Status` (Pending/Processing/Completed/Failed) を導入。非同期なデータ処理状態の追跡を可能に。
   - **プロバナンス（由来）情報の保持**: `Source` フィールドを追加し、RAG における回答精度の向上に不可欠な「情報のソース追跡」をスキーマレベルでサポート。
 
-- [x] Polyglot Communication (Go ↔ Python 連携) 🎉 Done
+- [x] **Polyglot Communication (Go ↔ Python 連携)** 🎉 Done
   - **マルチ言語構成**: Go（API）と Python（RAG Mock）を Docker Compose ネットワーク内で統合。`http_notifier` による言語間通信の実証を完遂。
   - **コンテナオーケストレーション**: `depends_on` による起動順序制御と、ネットワークエイリアスを用いたサービス間名前解決を確立。
 
 ## 🛠 今後の検証ロードマップ
 
-- [ ] **言語横断的な gRPC スキーマ統制 (Polyglot Governance)**
-  - Python (AsyncIO) クライアントからの接続検証。RAG パイプラインにおけるメタデータ受け渡しを想定した性能比較。
+### Phase 1: RAG 拡張 & イベント駆動コア（最優先）
+
+- [ ] **ドメイン駆動 RAG パイプラインの実装**
+  - ファイル保存をトリガーとした「テキスト抽出 → チャンク分割 → ベクトル化」のフローをドメインイベントとして定義。
+  - `python_rag_worker` を真の処理基盤へ昇格させ、非同期的なデータ加工パイプラインを確立。
+
+- [ ] **Pub/Sub 抽象化レイヤーの構築**
+  - GCP Cloud Pub/Sub が利用不可な環境でも、インメモリや Redis に差し替え可能なメッセージング・インターフェースの実装。
+
+### Phase 2: エンタープライズ・リライアビリティ
+
+- [ ] **Redis による分散ロックと冪等性制御**
+  - 重いバッチ処理や外部通知における二重実行を防止する「Idempotency Control」の実装。
+
+- [ ] **テナントごとの流量制御 (Rate Limiting)**
+  - 特定テナントの負荷がシステム全体を阻害しないよう、Redis を用いたクォータ管理を導入。
+
+### Phase 3: プラットフォーム・ガバナンス & DevEx
+
+- [ ] **マルチテナント隔離の完全防衛**
+  - ファイルパスの難読化（UUID）とメタデータ紐付けによる、他テナントからの「パス推測」を完全に遮断するストレージアダプターの実装。
+
+- [ ] **OpenTelemetry による分散トレーシングの高度化**
+  - Go と Python を跨ぐリクエストの可視化、およびテナントごとのリソース消費メトリクスの露出。
+
+- [ ] **管理用ダッシュボード (React) & CLI の提供**
+  - 処理ステータスの可視化、および開発者向けの自動生成（Scaffolding）ツールの統合。
 
 ## 📁 プロジェクト構造
 ```text
@@ -175,11 +216,16 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │       └── logger/        # 構造化ログ（slog）基盤。Trace IDの伝播を管理
 │           ├── context.go
 │           └── handler.go
-├── python_rag_mock/       # Python RAG 基盤のモックサーバー
+|
+├── python_rag_worker/     # Python RAG 基盤
+│   ├── app/                # Python 用 gRPC 生成コード
+│   |   ├── services/
+│   |   │   └── ingestor.py 
+│   |   └── main.py        # FastAPI のエントリポイント
 │   ├── pb/                # Python 用 gRPC 生成コード
 │   ├── Dockerfile         # Python 実行環境のコンテナ定義
-│   ├── main.py            # FastAPI による通知受付エンドポイント
 │   └── requirements.txt   # Python 依存ライブラリ
+|
 ├── tools/                 # 開発ツールの依存関係管理
 │   └── tools.go           # ビルドツールのバージョンを固定するための Go ファイル
 ├── migrations/            # DB スキーマ管理 (SQLファイル)
@@ -205,7 +251,6 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 ├── README.md              # 本ドキュメント
 │
 ├── python_comparison/     # [In Progress] Python (AsyncIO) との性能比較検証用
-├── rag_pipeline/          # [In Progress] RAG インジェスト基盤への拡張用設計
 └── aws_infrastructure/    # [In Progress] マルチクラウド (S3) 展開用の設計検討
 ```
 
