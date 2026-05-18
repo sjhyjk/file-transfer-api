@@ -119,7 +119,7 @@ func NewDataPipeline(ctx context.Context, cfg *config.Config) (domain.DataPipeli
 
 	case "REDIS":
 		// 🚀 最後の「Redisコミット」でここにRedisキュー実装を繋ぐ
-		return nil, fmt.Errorf("Redis pipeline is not implemented yet")
+		return nil, fmt.Errorf("redis pipeline is not implemented yet")
 
 	case "HTTP":
 		fallthrough

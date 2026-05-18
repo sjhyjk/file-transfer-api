@@ -40,7 +40,16 @@ func RunMigrations(ctx context.Context, dbURL string, fs embed.FS) error {
 	if err != nil {
 		return fmt.Errorf("migration instance creation failed: %w", err)
 	}
-	defer m.Close() // 🚀 確実にリソースを解放
+
+	defer func() {
+		// 🚀 確実にリソースを解放
+		if errSrc, errDb := m.Close(); errSrc != nil || errDb != nil {
+			slog.WarnContext(ctx, "failed to close migration instance cleanly",
+				"source_error", errSrc,
+				"db_error", errDb,
+			)
+		}
+	}()
 
 	// 最新の状態までアップデート
 	if err := m.Up(); err != nil {
