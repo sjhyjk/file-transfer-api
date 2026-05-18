@@ -9,7 +9,7 @@
 
 ---
 
-本プロジェクトの原点は、現職の金融基盤で直面した**「インフラ制約によるビジネス要件の断念」**という強い課題意識にあります。
+本プロジェクトの原点は、現職の金融基盤で直面した「**インフラ制約によるビジネス要件の断念**」という強い課題意識にあります。
 
 #### 🚩 直面した 3 つの構造的課題
 * **プラットフォーム依存による技術選定の硬直化**: 基盤側の都合でモダンな進化的アーキテクチャが阻害される現状。
@@ -18,7 +18,7 @@
 
 * **脆弱なセキュリティ境界**: 共有ストレージにおける「他テナントのパス推測可能性」という構造的欠陥。
 
-これらを「反面教師」とし、**エンタープライズ基準の厳格な制約下**でも進化可能なポータビリティと、開発者がロジックに集中できる**開発者体験 (DevEx)**の両立を、アーキテクチャの力で証明することを目的としています。
+これらを「反面教師」とし、**エンタープライズ基準の厳格な制約下**でも進化可能なポータビリティと、開発者がロジックに集中できる**開発者体験(DevEx)**の両立を、アーキテクチャの力で証明することを目的としています。
 
 ## 🚀 実装の柱
 
@@ -26,7 +26,7 @@
 OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成（oapi-codegen / protoc）による型安全な実装を強制。DIP の徹底によりビジネスロジックをインフラから隔離し、 `go-arch-lint` を用いた **Architecture Testing** により、設計の腐敗を静的に遮断しています。
 
 - **Transport Layer (Echo & gRPC)**: `Echo` および `gRPC` を併用し、共通の Interactor を介したマルチプロトコル・アダプター構成を採用。gRPC では **Reflection API** を有効化し、動的なサービス探索に対応。Middleware/Interceptor による **OIDC 認証** と **Trace ID 注入** を統合し、入り口でのガバナンスを共通化。
-- **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、インフラの制約から独立した**不変条件 (Invariants)**をインターフェースとして定義。全レイヤーの依存が向かう「不動の頂点」として配置しています。
+- **Domain**: 唯一の **Source of Truth**。数学的な「定義の抽象化」を意識し、インフラの制約から独立した**不変条件(Invariants)**をインターフェースとして定義。全レイヤーの依存が向かう「不動の頂点」として配置しています。
 - **Usecase**: `errgroup` を活用した **Fail-fast な並行処理制御** を実装。`infra` 層の具象実装を一切参照せず、純粋なビジネスロジック（並行アップロードのオーケストレーション等）に特化。
 - **Infrastructure (Factory Pattern)**: 環境変数に基づき、GCS/Local Storage/S3（予定）、Cloud SQL/In-Memory DB を動的に切り替える **Plug-and-Play** な構成を採用。
 - **cmd (Main Component)**: 依存注入（DI）と起動に特化。API/gRPC/CLI といった実行形態を外部から注入可能にし、コアロジックの再利用性を最大化。
@@ -98,7 +98,7 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 
 - [x] **GitHub Actions による高度な CI 構築** 🎉 *Done*
   - **安全性と性能の自動化**: `go test` による自動テスト、`testing.B` による性能監視、および商用グレードのリンターによる**機密情報混入の静的検知**を統合。
-  - **運用最適化**: `workflow_dispatch` を導入し、コストや状況に応じた**柔軟な手動デプロイ制御(If-conditional flow)**を確立。
+  - **運用最適化**: `workflow_dispatch` を導入し、コストや状況に応じた**柔軟な手動デプロイ制御(If-conditional flow)** を確立。
 
 - [x] **Cloud Run への自動デプロイ (CD)** 🎉 *Done*
   - **Attack Surface 最小化**: **Distroless** イメージを採用し、実行環境の脆弱性リスクを根本から低減。
@@ -200,44 +200,45 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   ├── infra/             # Infrastructure Adapters (技術的詳細の実装)
 │   │   ├── factory.go     # インフラ切り替えの司令塔
 │   │   ├── pipeline/      # External Integration (RAG基盤等へのイベント通知)
-│   │   |   └── http_notifier.go  # Python API への HTTP 通知実装
+│   │   │   └── http_notifier.go  # Python API への HTTP 通知実装
 │   │   ├── gcs/           # GCS 具象実装（Workload Identity 対応） (STORAGE_TYPE=GCS)
-│   │   |   └── gcs_repository.go
+│   │   │   └── gcs_repository.go
 │   │   ├── local/         # ローカルファイルシステム実装 (STORAGE_TYPE=LOCAL)
-│   │   |   └── local_repository.go
+│   │   │   └── local_repository.go
 │   │   ├── sql/           # Cloud SQL (PostgreSQL) 永続化・マイグレーション
-│   │   |   ├── db.go         # コネクション・CRUD実装
-│   │   |   └── migrations.go # golang-migrate 実行ロジック
-│   │   └── repository/    # 永続化層の具象実装
-│   │       └── inmemory/  # 高速な検証を可能にするインメモリDB実装
-│   │           └── memory_repository.go
+│   │   │   ├── client.go                # DB接続プール（pgxpool）の管理とリトライロジック
+│   │   │   ├── postgres_repository.go   # Repository 構造体の定義と、共通処理・Closeなどのインフラ共通定義
+│   │   │   ├── metadata_ops.go          # FileMetadata（CRUD）に関するデータ操作ロジック
+│   │   │   └── migrations.go            # golang-migrate 実行ロジック
+│   │   └── inmemory/  # 高速な検証を可能にするインメモリDB実装
+│   │        └── memory_repository.go
 │   └── pkg/               # ユーティリティ・基盤共通パッケージ
 │       ├── config/        # 設定ロード (config.go)
 │       └── logger/        # 構造化ログ（slog）基盤。Trace IDの伝播を管理
 │           ├── context.go
 │           └── handler.go
-|
+│
 ├── python_rag_worker/     # Python RAG 基盤
 │   ├── app/               # アプリケーションの構成とDIの起点
-│   |   ├── main.py        # FastAPI のエントリポイント（DIの実施）
-│   |   ├── api/           # ハンドラー層（HTTPリクエストの解釈）
-│   |   │   └── routes.py            # 通信（通知の受付）
-│   |   ├── infra/                   # インフラ層（外部ライブラリの実装詳細）
-│   |   │   ├── extractors/          # 形式ごとの抽出器を格納
-│   |   │   │   ├── base.py          # 共通インターフェース
-│   |   │   │   ├── excel_extractor.py
-│   |   │   │   ├── pdf_extractor.py 
-│   |   │   │   ├── pptx_extractor.py
-│   |   │   │   ├── text_extractor.py
-│   |   │   │   └── word_extractor.py 
-│   |   │   ├── extractor_factory.py # 形式判定と振り分け
-│   |   │   └── chunker.py           # チャンク分割
-│   |   └── services/                # ユースケース・ドメイン層（パイプラインの定義）
-│   |       └── rag_service.py       # オーケストレーション（全体の流れを制御）
+│   │   ├── main.py        # FastAPI のエントリポイント（DIの実施）
+│   │   ├── api/           # ハンドラー層（HTTPリクエストの解釈）
+│   │   │   └── routes.py            # 通信（通知の受付）
+│   │   ├── infra/                   # インフラ層（外部ライブラリの実装詳細）
+│   │   │   ├── extractors/          # 形式ごとの抽出器を格納
+│   │   │   │   ├── base.py          # 共通インターフェース
+│   │   │   │   ├── excel_extractor.py
+│   │   │   │   ├── pdf_extractor.py 
+│   │   │   │   ├── pptx_extractor.py
+│   │   │   │   ├── text_extractor.py
+│   │   │   │   └── word_extractor.py 
+│   │   │   ├── extractor_factory.py # 形式判定と振り分け
+│   │   │   └── chunker.py           # チャンク分割
+│   │   └── services/                # ユースケース・ドメイン層（パイプラインの定義）
+│   │       └── rag_service.py       # オーケストレーション（全体の流れを制御）
 │   ├── pb/                # Python 用 gRPC 生成コード
 │   ├── Dockerfile         # Python 実行環境のコンテナ定義
 │   └── requirements.txt   # Python 依存ライブラリ
-|
+│
 ├── tools/                 # 開発ツールの依存関係管理
 │   └── tools.go           # ビルドツールのバージョンを固定するための Go ファイル
 ├── migrations/            # DB スキーマ管理 (SQLファイル)

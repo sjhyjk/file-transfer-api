@@ -52,7 +52,7 @@ func main() {
 
 	// Factory経由でインメモリリポジトリを取得
 	// 🚀 司令塔（Factory）に丸投げ。中身が DB かインメモリかは Factory が知っている。
-	metadataRepo, dbCleanup, err = infra.NewMetadataRepository(ctx, file_transfer_api.MigrationFS)
+	metadataRepo, dbCleanup, err = infra.NewMetadataRepository(ctx, file_transfer_api.MigrationFS, cfg)
 	if err != nil {
 		slog.Error("failed to init metadata repo", "error", err)
 		os.Exit(1)

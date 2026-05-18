@@ -7,13 +7,12 @@ import (
 	"embed"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"file-transfer-api/internal/domain"
 	"file-transfer-api/internal/infra/gcs"
+	"file-transfer-api/internal/infra/inmemory"
 	"file-transfer-api/internal/infra/local"
 	"file-transfer-api/internal/infra/pipeline"
-	"file-transfer-api/internal/infra/repository/inmemory"
 	"file-transfer-api/internal/infra/sql"
 	"file-transfer-api/internal/pkg/config"
 )
@@ -72,36 +71,61 @@ func NewStorageRepository(ctx context.Context, cfg *config.Config) (domain.FileR
 
 // NewMetadataRepository は環境に応じて DB 実装を切り替える
 // 🚀 sql.OpenWithRetry をここで呼ぶことで main をクリーンにする
-func NewMetadataRepository(ctx context.Context, fs embed.FS) (domain.MetadataRepository, func(), error) {
-	dbType := os.Getenv("DB_TYPE")
-	dbURL := os.Getenv("DATABASE_URL")
+func NewMetadataRepository(ctx context.Context, fs embed.FS, cfg *config.Config) (domain.MetadataRepository, func(), error) {
+	dbType := cfg.DBType
+	dbURL := cfg.DBURL
 
 	if dbType == "INMEMORY" {
 		slog.InfoContext(ctx, "💡 DB_TYPE is INMEMORY. Skipping PostgreSQL connections and migrations.")
 		// インメモリの場合は cleanup (Close) が不要なので、空の関数を返します
-		var repo domain.MetadataRepository = inmemory.NewInMemoryRepository()
+		repo := inmemory.NewInMemoryRepository()
 		return repo, func() {}, nil
 	}
 
-	// 🚀 実機DBの場合はリトライとマイグレーションを実行
-	repo, err := sql.OpenWithRetry(ctx, dbURL, fs)
+	// 1. 🚀 分離したマイグレーションを先に実行
+	if err := sql.RunMigrations(ctx, dbURL, fs); err != nil {
+		return nil, nil, fmt.Errorf("failed to run database migrations: %w", err)
+	}
+
+	// 2. 🚀 分離したDB接続リトライを実行してプールを取得
+	pool, err := sql.OpenWithRetry(ctx, dbURL)
 	if err != nil {
 		// エラーログは OpenWithRetry 内で詳細に出ているのでラップして返す
-		return nil, nil, fmt.Errorf("failed to initialize SQL repository: %w", err)
+		return nil, nil, fmt.Errorf("failed to open database pool: %w", err)
+	}
+
+	// 3. プールをリポジトリに注入
+	repo := sql.NewRepository(pool)
+
+	// ✨ 成功ログはここに配置！「接続」と「マイグレーション」が両方完了したことを明示します
+	slog.InfoContext(ctx, "🎉 Database is ready and migrated successfully!")
+
+	cleanup := func() {
+		slog.Info("🔌 Closing PostgreSQL connection pool...")
+		repo.Close()
 	}
 
 	// 呼び出し側で close できるように cleanup 関数を返す
-	return repo, func() { repo.Close() }, nil
+	return repo, cleanup, nil
 }
 
 func NewDataPipeline(ctx context.Context, cfg *config.Config) (domain.DataPipeline, error) {
-	// 環境変数などで Python 側の URL を取得できるようにする
-	pythonURL := os.Getenv("PYTHON_RAG_URL")
-	if pythonURL == "" {
-		// 開発用デフォルト
-		pythonURL = "http://localhost:8000/ingest"
-	}
+	slog.InfoContext(ctx, "Initializing Data Pipeline", "type", cfg.PipelineType)
 
-	slog.InfoContext(ctx, "Initializing Python RAG Pipeline", "url", pythonURL)
-	return pipeline.NewPythonPipeline(pythonURL), nil
+	switch cfg.PipelineType {
+	case "GCP":
+		// 🚀 次の「Pub/Subコミット」でここにGCP用の箱やエミュレータ実装を繋ぐ
+		return nil, fmt.Errorf("GCP Pub/Sub pipeline is not implemented yet")
+
+	case "REDIS":
+		// 🚀 最後の「Redisコミット」でここにRedisキュー実装を繋ぐ
+		return nil, fmt.Errorf("Redis pipeline is not implemented yet")
+
+	case "HTTP":
+		fallthrough
+	default:
+		// 現在のHTTP通知（暫定）を返す
+		slog.InfoContext(ctx, "Using HTTP Python RAG Pipeline", "url", cfg.PythonRAGURL)
+		return pipeline.NewPythonPipeline(cfg.PythonRAGURL), nil
+	}
 }

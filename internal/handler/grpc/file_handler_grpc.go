@@ -38,9 +38,21 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 		return status.Errorf(codes.InvalidArgument, "Validation failed: %v", err)
 	}
 
+	// 🚀 メタデータのバリデーション（防衛的プログラミング）
+	if meta.Filename == "" || meta.TenantId == "" {
+		return status.Errorf(codes.InvalidArgument, "filename and tenant_id are required")
+	}
+
+	// 🚀 domain.NewFile の引数にストリームのメタデータをマッピング
+	// ※必要に応じて domain.File 側に TenantID 等を持たせるか、ToMetadata() 時に引き継げるようにしてください
+	if _, err := domain.NewFile(meta.Filename, meta.ExpectedSize, pr); err != nil {
+		return status.Errorf(codes.InvalidArgument, "Validation failed: %v", err)
+	}
+
 	// ✨ リクエスト開始のログ（コンテキストの付与）
 	slog.Info("gRPC upload stream started",
 		"filename", meta.Filename,
+		"tenant_id", meta.TenantId,
 		"trace_id", stream.Context().Value("trace_id"), // slog 拡張に合わせたキー
 	)
 

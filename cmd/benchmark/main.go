@@ -43,7 +43,7 @@ func main() {
 	// 1. MetadataRepo (ベンチマーク時は DB_TYPE=INMEMORY を環境変数に設定することを想定)
 
 	// ※ 性能差を見るため、I/O負荷が少ないインメモリ構成を基本とします
-	metadataRepo, dbCleanup, err = infra.NewMetadataRepository(ctx, file_transfer_api.MigrationFS)
+	metadataRepo, dbCleanup, err = infra.NewMetadataRepository(ctx, file_transfer_api.MigrationFS, cfg)
 	if err != nil {
 		os.Exit(1)
 	}

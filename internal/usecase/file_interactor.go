@@ -40,7 +40,7 @@ func (i *FileInteractor) UploadSingle(ctx context.Context, name string, size int
 		return err
 	}
 
-	meta := file.ToMetadata("manual_upload") // domain.File から Metadata を生成
+	meta := file.ToMetadata("manual_upload", "default-tenant")
 	if err := i.metadataRepo.Create(ctx, meta); err != nil {
 		return err
 	}
@@ -67,8 +67,10 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 		eg.Go(func() error {
 
 			// 1. DBに「Pending」状態でレコードを先行作成 (Create)
+			tenantID := "default-tenant" // ※ もし引数の []*domain.File やコンテキストから取れるならそこからマッピング
+
 			// ★ DB（Cloud SQL）へのメタデータ保存 ★
-			meta := f.ToMetadata("parallel-upload")
+			meta := f.ToMetadata("parallel-upload", tenantID)
 			meta.Status = domain.StatusPending // 明示的にPendingに
 
 			if i.metadataRepo != nil {

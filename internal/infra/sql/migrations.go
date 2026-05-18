@@ -12,7 +12,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/golang-migrate/migrate/v4/source/iofs" // 🚀 これが必要
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
 // 🚀 [重要] migrations フォルダをこのパッケージの直下に移動するか、
@@ -25,7 +25,7 @@ import (
 // RunMigrations は指定されたDB URLに対してマイグレーションを実行します
 // RunMigrations は外部から資産 (fs) を受け取る設計にする (DI)
 func RunMigrations(ctx context.Context, dbURL string, fs embed.FS) error {
-	slog.InfoContext(ctx, "Starting database migrations...")
+	slog.InfoContext(ctx, "🚀 Starting database migrations...")
 
 	// golang-migrate 自体は ctx を直接取らないことが多いですが、
 	// ログ出力に ctx を渡すことで、起動プロセスの追跡が可能になります
@@ -40,6 +40,7 @@ func RunMigrations(ctx context.Context, dbURL string, fs embed.FS) error {
 	if err != nil {
 		return fmt.Errorf("migration instance creation failed: %w", err)
 	}
+	defer m.Close() // 🚀 確実にリソースを解放
 
 	// 最新の状態までアップデート
 	if err := m.Up(); err != nil {

@@ -3,10 +3,14 @@ syntax = "proto3";
 package file;
 option go_package = "file-transfer-api/internal/handler/grpc/pb;filepb";
 
+import "google/protobuf/timestamp.proto"; // 🚀 タイムスタンプ用に追加
+
 service FileService {
   // Client-side Streaming: チャンクを連続して送り、最後にレスポンスを1つ返す
   rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse);
   rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  // 🚀 Go -> Python を gRPC で直接叩く、あるいは Pub/Sub の型として保証するために追加
+  rpc NotifyIngest(FileIngestEvent) returns (FileIngestResponse);
 }
 
 message UploadFileRequest {
@@ -17,11 +21,27 @@ message UploadFileRequest {
 }
 
 message FileMetadata {
-  string filename = 1;
-  string tenant_id = 2;
-  repeated string tags = 3;
-  string status = 4;
-  int64 expected_size = 5; // 🚀 事前バリデーション用
+  string id = 1;           // 🚀 UUID を受け取るために追加
+  string filename = 2;
+  string tenant_id = 3;    // 🚀 RESTと統一
+  repeated string tags = 4;
+  string status = 5;
+  int64 expected_size = 6; // 🚀 事前バリデーション用
+}
+
+// 🚀 Pub/Sub のメッセージの「正」となる、RAG 投入イベント定義
+message FileIngestEvent {
+  string file_id = 1;
+  string file_name = 2;
+  string tenant_id = 3;
+  repeated string tags = 4;
+  string source = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message FileIngestResponse {
+  string status = 1;
+  string message = 2;
 }
 
 message UploadFileResponse {

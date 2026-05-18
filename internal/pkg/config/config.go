@@ -18,6 +18,9 @@ type Config struct {
 	BucketName       string
 	Port             string
 	LocalStoragePath string
+	// 🚀 パイプライン拡張用の設定を追加
+	PipelineType string // "HTTP", "GCP", "REDIS" など
+	PythonRAGURL string // HTTP通知用、またはgRPC通知用URL
 }
 
 // Load は設定を読み込みます
@@ -34,6 +37,8 @@ func Load() *Config {
 		BucketName:       getEnv("BUCKET_NAME", "file-transfer-bucket-syou-20240121"),
 		Port:             getEnv("PORT", "8080"),
 		LocalStoragePath: getEnv("LOCAL_STORAGE_PATH", "/app/storage"),
+		PipelineType:     getEnv("PIPELINE_TYPE", "HTTP"), // デフォルトは現在のHTTP
+		PythonRAGURL:     getEnv("PYTHON_RAG_URL", "http://localhost:8000/ingest"),
 	}
 }
 

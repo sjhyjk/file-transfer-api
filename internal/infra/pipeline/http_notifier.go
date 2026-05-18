@@ -20,17 +20,24 @@ func NewPythonPipeline(endpoint string) *PythonPipeline {
 }
 
 func (p *PythonPipeline) NotifyNewFile(ctx context.Context, meta *domain.FileMetadata) error {
-	// 検討していたペイロード
 	payload := map[string]interface{}{
 		"file_id":   meta.ID,
 		"file_name": meta.FileName,
+		"tenant_id": meta.TenantID,
 		"tags":      meta.Tags,
 		"status":    meta.Status,
 		"source":    meta.Source,
 	}
 
-	body, _ := json.Marshal(payload)
-	req, _ := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewBuffer(body))
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)

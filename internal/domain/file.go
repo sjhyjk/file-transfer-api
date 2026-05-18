@@ -31,13 +31,17 @@ func NewFile(name string, size int64, content io.Reader) (*File, error) {
 }
 
 // FileMetadata を生成するビジネスルールをドメインモデルに持たせる
-func (f *File) ToMetadata(source string, tags ...string) *FileMetadata {
+func (f *File) ToMetadata(source string, tenantID string, tags ...string) *FileMetadata {
+	if tenantID == "" {
+		tenantID = "default-tenant" // 防衛的プログラミング
+	}
 	if len(tags) == 0 {
 		tags = []string{"auto-generated"} // デフォルトタグなど
 	}
 	return &FileMetadata{
 		FileName: f.Name,
 		FileSize: f.Size,
+		TenantID: tenantID,
 		Status:   StatusPending,
 		Source:   source,
 		Tags:     tags,
