@@ -90,10 +90,19 @@ func main() {
 	// 🚀 [4] 各プロトコルサーバーの起動
 	// =========================================================
 
-	// 1. gRPCサーバーの起動 (別ポート: 50051)
-	go appgrpc.StartServer(interactor, "50051")
+	// 🚀 環境変数に応じて起動する窓口を完全に切り替える
+	switch cfg.ServerMode {
+	case "GRPC":
+		slog.Info("Starting application in gRPC mode on port 50051")
+		appgrpc.StartServer(interactor, "50051") // メインスレッドで起動（go を付けない）
 
-	// 2. HTTPサーバーの起動 (メインスレッド)
-	// ポート取得や詳細な設定は rest パッケージが責任を持つ
-	apprest.StartServer(interactor, metadataRepo)
+	case "REST":
+		slog.Info("Starting application in REST(HTTP) mode on port 8080")
+		apprest.StartServer(interactor, metadataRepo) // メインスレッドで起動
+
+	default:
+		// どちらも指定がなければ、安全のために両方起動する（あるいはエラーにする）
+		go appgrpc.StartServer(interactor, "50051")
+		apprest.StartServer(interactor, metadataRepo)
+	}
 }

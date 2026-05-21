@@ -145,7 +145,7 @@ func (h *HTTPFileHandler) UploadFile(ctx echo.Context) error {
 
 	// 5. ロジック実行（並行アップロードではなく、単発アップロードを呼ぶ）
 	// もし UploadMultipleParallel しか無い場合はスライスに入れて渡します
-	err = h.interactor.UploadMultipleParallel(rCtx, []*domain.File{f})
+	err = h.interactor.UploadMultipleParallel(rCtx, tenantID, []*domain.File{f})
 	if err != nil {
 		slog.ErrorContext(rCtx, "Upload failed", "file", f.Name, "error", err)
 		return ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "upload failed"})

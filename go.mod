@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/storage v1.59.1
 	github.com/getkin/kin-openapi v0.133.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
+	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/joho/godotenv v1.5.1

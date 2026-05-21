@@ -60,17 +60,22 @@ func BenchmarkUploadMultipleParallel(b *testing.B) { // *testing.B に修正
 	// 第1引数: Storage用Repo, 第2引数: DB用Repo, 第3引数: Pipeline(今回はnil)
 	interactor := NewFileInteractor(repo, metaRepo, nil)
 
-	// 10個のダミーファイルを生成
-	files := make([]*domain.File, 10)
-	for i := 0; i < 10; i++ {
-		// ✅ NewFile を使うか、エラーを処理する
-		f, _ := domain.NewFile(fmt.Sprintf("bench-%d.txt", i), 100, strings.NewReader("dummy"))
-		files[i] = f
-	}
+	ctx := context.Background()
 
 	b.ResetTimer() // 純粋なループ処理だけを計測するためにタイマーをリセット
-	for i := 0; i < b.N; i++ {
-		_ = interactor.UploadMultipleParallel(context.Background(), files)
+	for i := 0; i < 10; i++ {
+		// ⚠️ io.Reader は一度読むと消費されてしまうため、ループ毎にフレッシュな状態にする
+		b.StopTimer()
+		// 10個のダミーファイルを生成
+		files := make([]*domain.File, 10)
+		for j := 0; j < 10; j++ {
+			// ✅ NewFile を使うか、エラーを処理する
+			f, _ := domain.NewFile(fmt.Sprintf("bench-%d.txt", j), 100, strings.NewReader("dummy"))
+			files[j] = f
+		}
+		b.StartTimer()
+
+		_ = interactor.UploadMultipleParallel(ctx, "bench-tenant", files)
 	}
 }
 
@@ -98,14 +103,14 @@ func TestUploadMultipleParallel_FailFast(t *testing.T) {
 
 	interactor := NewFileInteractor(repo, metaRepo, nil)
 
-	f1, _ := domain.NewFile("success-1.txt", 10, nil)
-	f2, _ := domain.NewFile(failFileName, 10, nil) // ここでエラーを発生させる
-	f3, _ := domain.NewFile("success-2.txt", 10, nil)
+	f1, _ := domain.NewFile("success-1.txt", 10, strings.NewReader("dummy"))
+	f2, _ := domain.NewFile(failFileName, 10, strings.NewReader("dummy")) // ここでエラーを発生させる
+	f3, _ := domain.NewFile("success-2.txt", 10, strings.NewReader("dummy"))
 
 	testFiles := []*domain.File{f1, f2, f3}
 
 	// 2. 実行：context.Background() を渡す
-	err := interactor.UploadMultipleParallel(context.Background(), testFiles)
+	err := interactor.UploadMultipleParallel(context.Background(), "test-tenant", testFiles)
 
 	// 3. 検証：errgroup によってエラーが呼び出し元に返ってくるか
 	if err == nil {

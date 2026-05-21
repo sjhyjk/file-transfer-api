@@ -56,7 +56,7 @@ func (i *FileInteractor) UploadSingle(ctx context.Context, name string, size int
 // UploadMultipleParallel は、Goroutine と errgroup を用いて複数のファイルを並行してアップロードします。
 // Goの並行処理モデルを活かしたスループット最大化に加え、Fail-fast なエラー制御により
 // 異常系におけるコンピューティングリソースの保護を両立しています。
-func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*domain.File) error {
+func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, tenantID string, files []*domain.File) error {
 	// errgroup.WithContext により、一箇所でもエラーが出ると ctx がキャンセルされる
 	eg, egCtx := errgroup.WithContext(ctx)
 
@@ -65,9 +65,6 @@ func (i *FileInteractor) UploadMultipleParallel(ctx context.Context, files []*do
 		// Go 1.22未満の場合は必要ですが、最新なら不要です
 
 		eg.Go(func() error {
-
-			// 1. DBに「Pending」状態でレコードを先行作成 (Create)
-			tenantID := "default-tenant" // ※ もし引数の []*domain.File やコンテキストから取れるならそこからマッピング
 
 			// ★ DB（Cloud SQL）へのメタデータ保存 ★
 			meta := f.ToMetadata("parallel-upload", tenantID)
@@ -158,7 +155,7 @@ func (i *FileInteractor) FetchMetadataList(ctx context.Context, tags []string, l
 
 // UploadMultipleSerial は、複数のファイルを1つずつ順番にアップロードします。
 // 【検証用】並行処理（Parallel）の優位性を定量的に実証するための比較用パスとして実装しています。
-func (i *FileInteractor) UploadMultipleSerial(ctx context.Context, files []*domain.File) error {
+func (i *FileInteractor) UploadMultipleSerial(ctx context.Context, tenantID string, files []*domain.File) error {
 	for _, f := range files {
 		fmt.Printf("⏳ [Serial] アップロード開始: %s\n", f.Name)
 		// 1つのアップロードが完了するまで次のループへ進まない（逐次処理）

@@ -45,6 +45,7 @@ func main() {
 	// ※ 性能差を見るため、I/O負荷が少ないインメモリ構成を基本とします
 	metadataRepo, dbCleanup, err = infra.NewMetadataRepository(ctx, file_transfer_api.MigrationFS, cfg)
 	if err != nil {
+		slog.Error("failed to init metadata repo for benchmark", "error", err)
 		os.Exit(1)
 	}
 	defer dbCleanup()
@@ -75,7 +76,7 @@ func main() {
 	fmt.Println("\n--- [Phase 1] Serial Upload Start ---")
 	startSerial := time.Now()
 
-	if err := interactor.UploadMultipleSerial(ctx, testFiles); err != nil {
+	if err := interactor.UploadMultipleSerial(ctx, "benchmark-tenant", testFiles); err != nil {
 		log.Fatalf("シリアルアップロード中にエラーが発生: %v", err)
 	}
 
@@ -88,7 +89,7 @@ func main() {
 	fmt.Println("\n--- [Phase 2] Parallel Upload Start ---")
 	startParallel := time.Now()
 
-	if err := interactor.UploadMultipleParallel(ctx, testFiles); err != nil {
+	if err := interactor.UploadMultipleParallel(ctx, "benchmark-tenant", testFiles); err != nil {
 		log.Fatalf("並行アップロード中にエラーが発生: %v", err)
 	}
 

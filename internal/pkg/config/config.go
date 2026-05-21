@@ -18,9 +18,10 @@ type Config struct {
 	BucketName       string
 	Port             string
 	LocalStoragePath string
-	// 🚀 パイプライン拡張用の設定を追加
-	PipelineType string // "HTTP", "GCP", "REDIS" など
-	PythonRAGURL string // HTTP通知用、またはgRPC通知用URL
+	ServerMode       string // "GRPC", "REST" の完全切り替え用
+	PipelineType     string // "HTTP", "GRPC", "GCP", "REDIS" など
+	PythonRAGURL     string // HTTP通知用URL
+	PythonGRPCTarget string // Python側のgRPCサーバー宛先用 (例: "localhost:50052")
 }
 
 // Load は設定を読み込みます
@@ -37,8 +38,10 @@ func Load() *Config {
 		BucketName:       getEnv("BUCKET_NAME", "file-transfer-bucket-syou-20240121"),
 		Port:             getEnv("PORT", "8080"),
 		LocalStoragePath: getEnv("LOCAL_STORAGE_PATH", "/app/storage"),
+		ServerMode:       getEnv("SERVER_MODE", "BOTH"),   // 🚀 デフォルトは安全のため両方起動
 		PipelineType:     getEnv("PIPELINE_TYPE", "HTTP"), // デフォルトは現在のHTTP
 		PythonRAGURL:     getEnv("PYTHON_RAG_URL", "http://localhost:8000/ingest"),
+		PythonGRPCTarget: getEnv("PYTHON_GRPC_TARGET", "localhost:50052"), // 🚀 デフォルトの宛先
 	}
 }
 

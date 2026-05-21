@@ -5,6 +5,7 @@ package grpc
 import (
 	"file-transfer-api/internal/domain"
 	filepb "file-transfer-api/internal/handler/grpc/pb"
+	"file-transfer-api/internal/handler/rest/appmiddleware"
 	"log/slog"
 	"net"
 
@@ -15,7 +16,9 @@ import (
 )
 
 func StartServer(interactor domain.FileUseCase, port string) {
-	grpcSrv := grpc.NewServer()
+	grpcSrv := grpc.NewServer(
+		grpc.StreamInterceptor(appmiddleware.TraceStreamServerInterceptor()),
+	)
 
 	// ヘルスチェック登録
 	healthSrv := health.NewServer()

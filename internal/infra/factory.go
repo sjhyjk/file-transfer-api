@@ -121,6 +121,11 @@ func NewDataPipeline(ctx context.Context, cfg *config.Config) (domain.DataPipeli
 		// 🚀 最後の「Redisコミット」でここにRedisキュー実装を繋ぐ
 		return nil, fmt.Errorf("redis pipeline is not implemented yet")
 
+	case "GRPC":
+		// Python側のgRPCサーバーの宛先（例: localhost:50052）をconfigから渡してクライアントを初期化
+		slog.InfoContext(ctx, "Using gRPC Client Pipeline", "target", cfg.PythonGRPCTarget)
+		return pipeline.NewGrpcPythonPipeline(cfg.PythonGRPCTarget), nil
+
 	case "HTTP":
 		fallthrough
 	default:

@@ -54,6 +54,7 @@ type DataPipeline interface {
 // FileUseCase (アプリケーション層への入り口)
 type FileUseCase interface {
 	UploadSingle(ctx context.Context, name string, size int64, content io.Reader) error
-	UploadMultipleParallel(ctx context.Context, files []*File) error
+	UploadMultipleParallel(ctx context.Context, tenantID string, files []*File) error
+	UploadMultipleSerial(ctx context.Context, tenantID string, files []*File) error // 🚀 ベンチマーク比較用に定義を追加
 	FetchMetadataList(ctx context.Context, tags []string, limit, offset int) ([]*FileMetadata, error)
 }

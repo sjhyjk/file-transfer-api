@@ -3,6 +3,7 @@
 package grpc
 
 import (
+	"bytes"
 	"file-transfer-api/internal/domain"
 	filepb "file-transfer-api/internal/handler/grpc/pb"
 	"io"
@@ -32,28 +33,23 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 		return err
 	}
 	meta := req.GetMetadata()
-	// 🚀 クライアントから送られた期待サイズを検証
-	// domain.NewFile 内で「1GB以上はエラー」等のロジックを動かす
-	if _, err := domain.NewFile(meta.Filename, meta.ExpectedSize, pr); err != nil {
-		return status.Errorf(codes.InvalidArgument, "Validation failed: %v", err)
-	}
 
 	// 🚀 メタデータのバリデーション（防衛的プログラミング）
-	if meta.Filename == "" || meta.TenantId == "" {
+	if meta == nil || meta.GetFilename() == "" || meta.GetTenantId() == "" {
 		return status.Errorf(codes.InvalidArgument, "filename and tenant_id are required")
 	}
 
-	// 🚀 domain.NewFile の引数にストリームのメタデータをマッピング
-	// ※必要に応じて domain.File 側に TenantID 等を持たせるか、ToMetadata() 時に引き継げるようにしてください
-	if _, err := domain.NewFile(meta.Filename, meta.ExpectedSize, pr); err != nil {
+	// 🚀 クライアントから送られた期待サイズを検証
+	// domain.NewFile 内で「1GB以上はエラー」等のロジックを動かす
+	var dummyReader io.Reader = bytes.NewBuffer(nil)
+	if _, err := domain.NewFile(meta.GetFilename(), meta.GetExpectedSize(), dummyReader); err != nil {
 		return status.Errorf(codes.InvalidArgument, "Validation failed: %v", err)
 	}
 
 	// ✨ リクエスト開始のログ（コンテキストの付与）
-	slog.Info("gRPC upload stream started",
-		"filename", meta.Filename,
-		"tenant_id", meta.TenantId,
-		"trace_id", stream.Context().Value("trace_id"), // slog 拡張に合わせたキー
+	slog.InfoContext(stream.Context(), "gRPC upload stream started",
+		"filename", meta.GetFilename(),
+		"tenant_id", meta.GetTenantId(),
 	)
 
 	// 3. 非同期でストリームを読み込み、パイプに書き込む
@@ -79,7 +75,7 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 			}
 
 			if chunk := req.GetChunk(); chunk != nil {
-				// 【修正】pw.Write のエラーチェックを追加
+				// pw.Write のエラーチェックを追加
 				if _, writeErr := pw.Write(chunk); writeErr != nil {
 					slog.Warn("pipe write interrupted", "error", writeErr) // 異常終了の予兆として記録
 					// 書き込みエラー（pr側が閉じられた等）が発生した場合は即座に終了
@@ -91,14 +87,14 @@ func (h *GRPCFileHandler) UploadFile(stream filepb.FileService_UploadFileServer)
 	}()
 
 	// 4. 既存の Usecase を呼び出す
-	// ストリームから流れてくる pr (io.Reader) をそのまま domain.File に渡す
+	// 本番用の domain.File を本物のパイプ（pr）を使って生成
 	f, err := domain.NewFile(meta.Filename, meta.ExpectedSize, pr)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid metadata: %v", err)
 	}
 
 	// 既存のロジックを再利用（DIPの恩恵）
-	err = h.interactor.UploadMultipleParallel(stream.Context(), []*domain.File{f})
+	err = h.interactor.UploadMultipleParallel(stream.Context(), meta.TenantId, []*domain.File{f})
 	if err != nil {
 		// ✨ エラーの詳細ログ記録
 		// クライアントには詳細を隠しつつ、内部では原因を特定可能にする
