@@ -200,6 +200,7 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   ├── infra/             # Infrastructure Adapters (技術的詳細の実装)
 │   │   ├── factory.go     # インフラ切り替えの司令塔
 │   │   ├── pipeline/      # External Integration (RAG基盤等へのイベント通知)
+│   │   │   ├── grpc_notifier.go  # Python API への gRPC 通知実装
 │   │   │   └── http_notifier.go  # Python API への HTTP 通知実装
 │   │   ├── gcs/           # GCS 具象実装（Workload Identity 対応） (STORAGE_TYPE=GCS)
 │   │   │   └── gcs_repository.go
@@ -236,6 +237,8 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   │   └── services/                # ユースケース・ドメイン層（パイプラインの定義）
 │   │       └── rag_service.py       # オーケストレーション（全体の流れを制御）
 │   ├── pb/                # Python 用 gRPC 生成コード
+│   │   ├── file_pb2.py
+│   │   └── file_pb2_grpc.py
 │   ├── Dockerfile         # Python 実行環境のコンテナ定義
 │   └── requirements.txt   # Python 依存ライブラリ
 │

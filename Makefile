@@ -21,10 +21,11 @@ gen-proto: gen-proto-go gen-proto-python ## Go と Python の両方の proto コ
 gen-proto-go: ## Go 用の gRPC コードのみを生成
 	@echo "🚀 Generating gRPC code from $(API_PROTO)..."
 	# Go 用
-	protoc --proto_path=. \
+	protoc \
+		--proto_path=$(dir $(API_PROTO)) \
 		--go_out=. --go_opt=module=file-transfer-api \
 		--go-grpc_out=. --go-grpc_opt=module=file-transfer-api \
-		$(API_PROTO)
+		$(notdir $(API_PROTO))
 	@echo "✨ Generation completed"
 
 .PHONY: gen-proto-python

@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v3.12.4
-// source: api/proto/file.proto
+// source: file.proto
 
 package filepb
 
@@ -191,5 +191,5 @@ var FileService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "api/proto/file.proto",
+	Metadata: "file.proto",
 }
