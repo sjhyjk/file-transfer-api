@@ -1,12 +1,14 @@
 services:
-  # --- API Server (Go) ---
+  # ---------------------------------------------------------------------------
+  # 🏢 1. API Server (Go) - システムの司令塔
+  # ---------------------------------------------------------------------------
   api:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
-      - "50051:50051"
+      - "50051:50051" # Go側のgRPC受付口
     environment:
       - PORT=8080
       - DB_TYPE=SQL
@@ -14,16 +16,22 @@ services:
       - DATABASE_URL=postgres://app_user:app_pass@db:5432/transfer_metadata?sslmode=disable
       - STORAGE_TYPE=LOCAL
       - LOCAL_STORAGE_PATH=/app/storage
-      # 💡 Python 側への通知先エンドポイント
-      - PYTHON_RAG_URL=http://rag-mock:8000/ingest
+      - PIPELINE_TYPE=GRPC
+      # 🚀 Pythonワーカーの分離に伴い、それぞれの宛先をコンテナ名で指定
+      - PYTHON_RAG_URL=http://rag-worker-http:8000/ingest
+      - PYTHON_GRPC_TARGET=rag-worker-grpc:50051
     volumes:
-      - ./storage:/app/storage # 💡 ポイント2: ローカル保存ファイルの永続化
+      # 💡 ポイント2: ローカル保存ファイルの永続化
+      - ./storage:/app/storage # Go側は書き込み可能
     depends_on:
       db:
         condition: service_healthy # 💡 ポイント3: DBが完全に立ち上がってから起動
-      rag-worker: { condition: service_started }
+      rag-worker-http: { condition: service_started }
+      rag-worker-grpc: { condition: service_started }
 
-  # --- Database (PostgreSQL) ---
+  # ---------------------------------------------------------------------------
+  # 💾 2. Database (PostgreSQL)
+  # ---------------------------------------------------------------------------
   db:
     image: postgres:15-alpine
     environment:
@@ -33,7 +41,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      # 💡 ポイント4: マネフォ基準の「接続可能性」チェック
+      # 💡 ポイント4: 「接続可能性」チェック
       test: ["CMD-SHELL", "pg_isready -U app_user -d transfer_metadata"]
       interval: 5s
       timeout: 5s
@@ -41,18 +49,40 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-# --- Python RAG Mock Server ---
-  rag-worker: 
+  # ---------------------------------------------------------------------------
+  # 🌐 3. Python RAG Server [HTTP Mode] - Webhookやヘルスチェックの受付窓口
+  # ---------------------------------------------------------------------------
+  rag-worker-http: 
     build:
       context: ./python_rag_worker
       dockerfile: Dockerfile
+    # 🚀 commandを上書きしてHTTP用のmainを起動
+    command: ["uvicorn", "app.main_http:app", "--host", "0.0.0.0", "--port", "8000"]
     volumes:
       - ./storage:/app/storage:ro # 💡 読み取り専用(ro)でマウント
     ports:
-      - "8001:8000"
+      - "8001:8000" # ホスト側の8001番をHTTP窓口とする
     environment:
       - LOG_LEVEL=info
       - STORAGE_ROOT=/app/storage
+
+  # ---------------------------------------------------------------------------
+  # 📡 4. Python RAG Server [gRPC Mode] - コアシステムからの重たい処理部隊
+  # ---------------------------------------------------------------------------
+  rag-worker-grpc:
+    build:
+      context: ./python_rag_worker
+      dockerfile: Dockerfile
+    # 🚀 commandを上書きしてネイティブ非同期gRPCのmainを起動
+    command: ["python", "-m", "app.main_grpc"]
+    volumes:
+      - ./storage:/app/storage:ro # 💡 安全のため読み取り専用(ro)で共有
+    ports:
+      - "50052:50051" # gRPC専用ポートをそのまま公開
+    environment:
+      - LOG_LEVEL=info
+      - STORAGE_ROOT=/app/storage
+      - GRPC_PORT=50051
 
 volumes:
   postgres_data: # DBの中身を消さないためのボリューム

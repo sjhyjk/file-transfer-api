@@ -21,7 +21,7 @@ type Config struct {
 	ServerMode       string // "GRPC", "REST" の完全切り替え用
 	PipelineType     string // "HTTP", "GRPC", "GCP", "REDIS" など
 	PythonRAGURL     string // HTTP通知用URL
-	PythonGRPCTarget string // Python側のgRPCサーバー宛先用 (例: "localhost:50052")
+	PythonGRPCTarget string // Python側のgRPCサーバー宛先用 (例: "localhost:50051")
 }
 
 // Load は設定を読み込みます
@@ -41,7 +41,7 @@ func Load() *Config {
 		ServerMode:       getEnv("SERVER_MODE", "BOTH"),   // 🚀 デフォルトは安全のため両方起動
 		PipelineType:     getEnv("PIPELINE_TYPE", "HTTP"), // デフォルトは現在のHTTP
 		PythonRAGURL:     getEnv("PYTHON_RAG_URL", "http://localhost:8000/ingest"),
-		PythonGRPCTarget: getEnv("PYTHON_GRPC_TARGET", "localhost:50052"), // 🚀 デフォルトの宛先
+		PythonGRPCTarget: getEnv("PYTHON_GRPC_TARGET", "rag-worker-grpc:50051"), // 🚀 デフォルトの宛先
 	}
 }
 

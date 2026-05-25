@@ -22,9 +22,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# ソースコードのコピー
-COPY app/ .
+# 💡 3. ディレクトリ構造を保ったままソースコードをコピー
+COPY app/ ./app
+
+# ポートの明示 (FastAPI: 8000, gRPC: 50051)
+EXPOSE 8000
+EXPOSE 50051
 
 # FastAPIを起動 (ポート8000)
 # --host 0.0.0.0 はコンテナ外からのアクセスを許可するために必須
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main_http:app", "--host", "0.0.0.0", "--port", "8000"]

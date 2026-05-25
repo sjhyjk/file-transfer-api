@@ -221,10 +221,18 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │
 ├── python_rag_worker/     # Python RAG 基盤
 │   ├── app/               # アプリケーションの構成とDIの起点
-│   │   ├── main.py        # FastAPI のエントリポイント（DIの実施）
-│   │   ├── api/           # ハンドラー層（HTTPリクエストの解釈）
-│   │   │   └── routes.py            # 通信（通知の受付）
-│   │   ├── infra/                   # インフラ層（外部ライブラリの実装詳細）
+│   │   ├── main_http.py             # HTTPワーカー専用エントリーポイント（FastAPI）
+│   │   ├── main_grpc.py             # gRPCワーカー専用エントリーポイント（Async gRPC）
+│   │   ├── api/           # ハンドラー層（外部リクエストの解釈とルーティング）
+│   │   │   ├── http_handler.py      # HTTPエンドポイント・ヘルスチェック
+│   │   │   ├── grpc_handler.py      # gRPCサービサーロジック
+│   │   │   └── grpc_server.py       # gRPCサーバーの純粋なライフサイクル管理
+│   │   ├── pb/            # Python 用 gRPC 生成コード
+│   │   │   ├── file_pb2.py
+│   │   │   └── file_pb2_grpc.py
+│   │   ├── services/      # ユースケース・ドメイン層（パイプラインの定義）
+│   │   │   └── rag_service.py       # オーケストレーションとRAG核心ロジック（HTTP/gRPC共通）
+│   │   ├── infra/         # インフラ層（外部ライブラリの実装詳細）
 │   │   │   ├── extractors/          # 形式ごとの抽出器を格納
 │   │   │   │   ├── base.py          # 共通インターフェース
 │   │   │   │   ├── excel_extractor.py
@@ -234,16 +242,12 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   │   │   │   └── word_extractor.py 
 │   │   │   ├── extractor_factory.py # 形式判定と振り分け
 │   │   │   └── chunker.py           # チャンク分割
-│   │   └── services/                # ユースケース・ドメイン層（パイプラインの定義）
-│   │       └── rag_service.py       # オーケストレーション（全体の流れを制御）
-│   ├── pb/                # Python 用 gRPC 生成コード
-│   │   ├── file_pb2.py
-│   │   └── file_pb2_grpc.py
+│   │   └── core/
+│   │       ├── config.py            # 環境変数・設定管理
+│   │       └── logger.py            # ログの一元初期化
 │   ├── Dockerfile         # Python 実行環境のコンテナ定義
 │   └── requirements.txt   # Python 依存ライブラリ
 │
-├── tools/                 # 開発ツールの依存関係管理
-│   └── tools.go           # ビルドツールのバージョンを固定するための Go ファイル
 ├── migrations/            # DB スキーマ管理 (SQLファイル)
 │   ├── 000001_create_file_metadata_table.up.sql
 │   ├── 000001_create_file_metadata_table.down.sql
@@ -255,14 +259,22 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、コード生成
 │   └── variables.tf       # プロジェクトID・バケット名の変数管理
 ├── .github/workflows/     # CI/CD パイプライン (GitHub Actions)
 │   └── docker-build.yml   # 自動コンテナビルド定義
-├── assets.go              # プロジェクト共通資産（SQL等）の embed 定義
 ├── data/                  # テスト用データ（parallel-test-*.txt 等）
+│
+# 💡 【Goコード・ビルド関連の塊】
+├── assets.go              # プロジェクト共通資産（SQL等）の embed 定義
+├── go.mod                 # 依存関係管理
+├── tools/                 # 開発ツールの依存関係管理
+│   └── tools.go           # ビルドツールのバージョンを固定するための Go ファイル
+│
+# 💡 【環境・コンテナインフラ関連の塊】
 ├── docker-compose.yml     # DB・API, Python Mockの疎結合な依存関係とネットワークを定義
 ├── Dockerfile             # マルチステージビルドによる軽量実行イメージ定義
 ├── .env                   # 環境設定（Git管理対象外）
+│
+# 💡 【Linter・CI/CD・タスク自動化関連の塊】
 ├── .go-arch-lint.yml      # クリーンアーキテクチャの依存方向を強制する Lint 定義
 ├── .golangci.yml          # 静的解析ルール定義
-├── go.mod                 # 依存関係管理
 ├── Makefile               # 標準化された開発コマンド (Go/Python 両対応)
 ├── README.md              # 本ドキュメント
 │

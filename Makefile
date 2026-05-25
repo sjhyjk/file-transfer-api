@@ -31,12 +31,19 @@ gen-proto-go: ## Go 用の gRPC コードのみを生成
 .PHONY: gen-proto-python
 gen-proto-python: ## Python 用の gRPC コードを生成
 	@echo "🐍 Generating gRPC code for Python..."
+	# 💡 コマンド実行前にディレクトリを作成し、__init__.pyを配置（これでエラーを防ぎます）
+	mkdir -p ./python_rag_worker/app/pb
+	touch ./python_rag_worker/app/pb/__init__.py
+	cp $(API_PROTO) ./python_rag_worker/app/pb/
+
 	# Python 用 (grpcio-tools が必要)
 	python3 -m grpc_tools.protoc \
-		--proto_path=$(dir $(API_PROTO)) \
-		--python_out=./python_rag_worker/pb \
-		--grpc_python_out=./python_rag_worker/pb \
-		$(notdir $(API_PROTO))
+		--proto_path=./python_rag_worker \
+		--python_out=./python_rag_worker \
+		--grpc_python_out=./python_rag_worker \
+		./python_rag_worker/app/pb/$(notdir $(API_PROTO))
+
+	rm ./python_rag_worker/app/pb/$(notdir $(API_PROTO))
 	@echo "✨ Generation completed"
 
 # --- [将来のための備え] ---
