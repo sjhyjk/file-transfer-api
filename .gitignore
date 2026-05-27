@@ -10,6 +10,12 @@ gcp-key.json
 *.exe
 *.test
 
+# 💡 gRPC / Protocol Buffers のGo側自動生成コード
+internal/handler/grpc/pb/*.pb.go
+
+# (参考) OpenAPIからコードを毎回自動生成して上書きする運用にする場合は以下も除外
+# internal/handler/api.gen.go
+
 # 依存関係（通常は go.mod/sum があれば不要）
 # Goのツール
 vendor/
