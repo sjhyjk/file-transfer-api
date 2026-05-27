@@ -1,6 +1,7 @@
 # --- セキュリティ (絶対に必要) ---
 # 認証キー
 gcp-key.json
+.env
 
 # --- Go 関連 ---
 # ビルドで生成される実行ファイル
@@ -8,11 +9,24 @@ app
 main
 *.exe
 *.test
-.env
 
 # 依存関係（通常は go.mod/sum があれば不要）
 # Goのツール
 vendor/
+
+# --- Python 関連 (★追加) ---
+# ローカルの仮想環境を絶対にコミットしない
+**/venv/
+**/.venv/
+**/env/
+
+# gRPCの自動生成コードはMakefileで生成するためGit管理外にする
+**/app/pb/*_pb2.py
+**/app/pb/*_pb2_grpc.py
+
+# Pythonのキャッシュ
+**/__pycache__/
+**/*.pyc
 
 # --- Docker 関連 ---
 # コンテナ内のデータがホスト側にマウントされるディレクトリ
@@ -35,6 +49,9 @@ storage/
 .terraform.lock.hcl
 
 # --- システム/エディタ (環境を汚さない) ---
+# --- 開発用の一時ファイル / エディタ ---
+*.log
+test.txt
 .vscode/
 .idea/
 .DS_Store

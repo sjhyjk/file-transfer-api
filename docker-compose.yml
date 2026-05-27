@@ -57,7 +57,7 @@ services:
       context: ./python_rag_worker
       dockerfile: Dockerfile
     # 🚀 commandを上書きしてHTTP用のmainを起動
-    command: ["uvicorn", "app.main_http:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "main_http:app", "--host", "0.0.0.0", "--port", "8000"]
     volumes:
       - ./storage:/app/storage:ro # 💡 読み取り専用(ro)でマウント
     ports:
@@ -74,7 +74,7 @@ services:
       context: ./python_rag_worker
       dockerfile: Dockerfile
     # 🚀 commandを上書きしてネイティブ非同期gRPCのmainを起動
-    command: ["python", "-m", "app.main_grpc"]
+    command: ["python", "main_grpc.py"]
     volumes:
       - ./storage:/app/storage:ro # 💡 安全のため読み取り専用(ro)で共有
     ports:

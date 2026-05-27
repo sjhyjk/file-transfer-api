@@ -1,1 +1,0 @@
-Hello RAG Pipeline, this is user metadata.

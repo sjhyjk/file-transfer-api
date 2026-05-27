@@ -1,0 +1,24 @@
+# python_rag_worker/.dockerignore
+
+# ローカルの仮想環境をコンテナに入れない
+venv/
+.venv/
+env/
+
+# Pythonのキャッシュファイル
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# テスト用のキャッシュやログ
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# エディタの隠しファイル
+.git/
+.gitignore
+.vscode/
+.idea/

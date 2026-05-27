@@ -18,7 +18,7 @@ gen-api: ## OpenAPIからGoのコードを自動生成
 gen-proto: gen-proto-go gen-proto-python ## Go と Python の両方の proto コードを生成
 
 .PHONY: gen-proto-go
-gen-proto-go: ## Go 用の gRPC コードのみを生成
+gen-proto-go: ## Go 用の gRPC コードを生成
 	@echo "🚀 Generating gRPC code from $(API_PROTO)..."
 	# Go 用
 	protoc \
@@ -30,19 +30,18 @@ gen-proto-go: ## Go 用の gRPC コードのみを生成
 
 .PHONY: gen-proto-python
 gen-proto-python: ## Python 用の gRPC コードを生成
-	@echo "🐍 Generating gRPC code for Python..."
-	# 💡 コマンド実行前にディレクトリを作成し、__init__.pyを配置（これでエラーを防ぎます）
-	mkdir -p ./python_rag_worker/app/pb
-	touch ./python_rag_worker/app/pb/__init__.py
+	@echo "🐍 Generating gRPC code for Python from $(API_PROTO)..."
+	# 🚀 正の proto ファイルを、Python 側の生成用ターゲットとして一時的にコピー配置
 	cp $(API_PROTO) ./python_rag_worker/app/pb/
 
 	# Python 用 (grpcio-tools が必要)
-	python3 -m grpc_tools.protoc \
-		--proto_path=./python_rag_worker \
-		--python_out=./python_rag_worker \
-		--grpc_python_out=./python_rag_worker \
-		./python_rag_worker/app/pb/$(notdir $(API_PROTO))
-
+	cd python_rag_worker/app && python3 -m grpc_tools.protoc \
+		--proto_path=. \
+		--python_out=. \
+		--grpc_python_out=. \
+		./pb/$(notdir $(API_PROTO))
+	
+	# 🔥 生成が終わったら、二重管理にならないよう元の .proto コピーだけを綺麗に削除
 	rm ./python_rag_worker/app/pb/$(notdir $(API_PROTO))
 	@echo "✨ Generation completed"
 
