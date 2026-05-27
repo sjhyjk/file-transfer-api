@@ -5,8 +5,8 @@ gcp-key.json
 
 # --- Go 関連 ---
 # ビルドで生成される実行ファイル
-app
-main
+/app
+/main
 *.exe
 *.test
 
