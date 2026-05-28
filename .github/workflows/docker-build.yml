@@ -31,6 +31,13 @@ jobs:
         go-version: '1.25' # 1.24 から 1.25 へ。これでツールチェーンの自動DLをスキップできます
         cache: true        # 依存関係のキャッシュを有効化して、さらに高速化
 
+    # 🔥 コード生成前の「真っ新な状態」で開発者の更新漏れをチェック
+    # =================================================================
+    - name: Check go.mod tidy before code generation
+      run: |
+        go mod tidy
+        git diff --exit-code go.mod go.sum || (echo "🚨 Error: Please run 'go mod tidy' locally and commit the changes!" && exit 1)
+
     # 💡 CI環境へ protoc コマンドをインストールする
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
@@ -52,6 +59,10 @@ jobs:
     - name: Generate gRPC Codes
       run: make gen-proto
 
+    # 💡 自動生成によって生じた go.mod の変化を、ステップを跨いで永続化させる
+    - name: Tidy Dependencies after Generation
+      run: go mod tidy
+
 # --- ここから「Push時」にも必ず走る高品質化ステップ ---
     # ==========================================
     # Phase 1: Quality Gate (Push & Manual)
@@ -63,8 +74,8 @@ jobs:
     # go.mod / go.sum の更新漏れを検知し、ビルドの再現性を守ります。
     - name: Basic Quality Check
       run: |
+        # 💡 自動生成コードが加わった最新の状態にモジュールを完全同期
         go mod tidy
-        git diff --exit-code go.mod go.sum || (echo "Please run 'go mod tidy' and commit the changes" && exit 1)
         # コンパイルは通るが潜在的なバグの原因になりそうなコードを検知します。
         go vet ./...
         # 全パッケージが正しくビルド可能か、Dockerビルド前に検証します
@@ -93,8 +104,8 @@ jobs:
     # 設計原則（DIP等）がコードレベルで守られているかを強制します。
     - name: Architecture Check
       run: |
-        # インストールと実行を分離せず、直接 go run で実行する
-        go run github.com/fe3dback/go-arch-lint@latest check
+        go install github.com/fe3dback/go-arch-lint@latest
+        go-arch-lint check
 
     # --- ここから「手動実行（workflow_dispatch）」時のみ走るステップ ---
 
@@ -154,4 +165,4 @@ jobs:
           STORAGE_TYPE=gcs
           GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
           BUCKET_NAME=file-transfer-bucket-syou-20240121
-          DATABASE_URL=postgres://app_user:${{ secrets.DB_PASSWORD }}@/transfer_metadata?host=/cloudsql/${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
+          DATABASE_URL=postgres://app_user:${{ secrets.DB_PASSWORD }}@/transfer_metadata?host==%2Fcloudsql%2F${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
