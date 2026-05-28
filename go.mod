@@ -6,7 +6,6 @@ require (
 	cloud.google.com/go/storage v1.59.1
 	github.com/getkin/kin-openapi v0.133.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/joho/godotenv v1.5.1
@@ -15,7 +14,6 @@ require (
 	github.com/oapi-codegen/runtime v1.4.0
 	golang.org/x/sync v0.20.0
 	google.golang.org/grpc v1.76.0
-	google.golang.org/protobuf v1.36.10
 )
 
 require (
@@ -87,6 +85,7 @@ require (
 	google.golang.org/genproto v0.0.0-20250922171735-9219d122eba9 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251111163417-95abcf5c77ba // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251111163417-95abcf5c77ba // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
