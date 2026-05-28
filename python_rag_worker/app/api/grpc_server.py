@@ -11,7 +11,6 @@ from core.config import settings
 
 logger = logging.getLogger("rag-worker")
 
-
 class GRPCServerManager:
     """gRPC サーバーのライフサイクル（起動・停止）を専門に管理するコンポーネント"""
 
