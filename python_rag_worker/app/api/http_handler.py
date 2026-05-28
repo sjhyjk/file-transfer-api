@@ -12,10 +12,12 @@ logger = logging.getLogger("rag-worker")
 
 router = APIRouter()
 
+
 @router.get("/health", tags=["Infrastructure"])
 def health() -> dict[str, str]:
     """インフラ監視用のヘルスチェックエンドポイント"""
     return {"status": "ok"}
+
 
 @router.post("/ingest", tags=["Pipeline"])
 async def ingest_notification(request: Request) -> Any:
@@ -41,7 +43,7 @@ async def ingest_notification(request: Request) -> Any:
         logger.info(
             f"📥 [HTTP Ingest] Received event | "
             f"Tenant: {tenant_id} | File: {file_name} (ID: {file_id})"
-            )
+        )
 
         # RAGパイプライン（抽出・分割）の実行
         result = await rag_service.run_pipeline(tenant_id, full_path)

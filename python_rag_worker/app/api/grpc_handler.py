@@ -5,12 +5,13 @@ import os
 from typing import Any
 
 import grpc
-
 import pb.file_pb2 as file_pb2
 import pb.file_pb2_grpc as file_pb2_grpc
+
 from core.config import settings
 
 logger = logging.getLogger("rag-worker")
+
 
 class FileServiceServicer(file_pb2_grpc.FileServiceServicer):
     """Go サーバーからの gRPC リクエストを待ち受けるハンドラー"""
@@ -21,10 +22,8 @@ class FileServiceServicer(file_pb2_grpc.FileServiceServicer):
 
     # 💡 grpcの同期メソッド内でasync関数（run_pipeline）を安全に実行するための即時実行
     async def NotifyIngest(
-            self,
-            request: Any,
-            context: grpc.aio.ServicerContext
-    )-> Any:
+        self, request: Any, context: grpc.aio.ServicerContext
+    ) -> Any:
         """Go からのファイルアップロード完了通知を受け取り、
         RAGパイプラインを非同期駆動する
         """
@@ -43,6 +42,7 @@ class FileServiceServicer(file_pb2_grpc.FileServiceServicer):
 
             # トレースIDも、無ければその場で新規発行（uuid等）して、追跡性を死守する
             import uuid
+
             trace_id = metadata.get("x-trace-id", f"generated-{uuid.uuid4()}")
 
             logger.info(
@@ -58,7 +58,7 @@ class FileServiceServicer(file_pb2_grpc.FileServiceServicer):
             result = await self.rag_service.run_pipeline(tenant_id, full_path)
 
             if result.get("status") == "success":
-                return file_pb2.FileIngestResponse( # type: ignore
+                return file_pb2.FileIngestResponse(  # type: ignore
                     status="success",
                     message=(
                         f"Successfully processed RAG pipeline via gRPC. "

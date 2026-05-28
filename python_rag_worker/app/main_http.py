@@ -12,6 +12,7 @@ from services.rag_service import RAGService
 # 1. ログの一元初期化（最優先で実行して、以降の全ログの見た目を統一する）
 init_logger()
 
+
 # 🚀 HTTPアプリ専用の lifespan ハンドラー
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI) -> AsyncGenerator[None]:
@@ -23,11 +24,12 @@ async def lifespan(app_instance: FastAPI) -> AsyncGenerator[None]:
     # 終了時の処理（クリーンアップなどが必要になればここに）
     # logger.info("HTTP Worker stopped.")
 
+
 # 2. HTTP 専用アプリとして FastAPI を構成
 app = FastAPI(
     title="RAG Worker [HTTP Mode]",
     description="REST API interface for RAG pipeline ingestion",
-    lifespan=lifespan  # 💡 ライフサイクルを登録
+    lifespan=lifespan,  # 💡 ライフサイクルを登録
 )
 
 # 3. 依存関係（DI）のセットアップと状態管理への登録

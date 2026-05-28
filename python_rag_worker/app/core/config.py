@@ -15,5 +15,6 @@ class Settings:
     # ストレージ設定 (Go側の LOCAL_STORAGE_PATH と同期)
     storage_root: str = os.getenv("STORAGE_ROOT", "/app/storage")
 
+
 # シングルトンとしてエクスポート
 settings = Settings()

@@ -8,6 +8,7 @@ from infra.extractor_factory import ExtractorFactory
 
 logger = logging.getLogger("rag-worker")
 
+
 class RAGService:
     def __init__(self, vector_store: Any = None) -> None:
         # 💡 今は None だが、将来的に pgvector 等の
@@ -48,17 +49,14 @@ class RAGService:
             # 💡 TODO: Phase 2 でベクトル化とDB登録を実装
             # self.vector_store.upsert(chunks, tenant_id=tenant_id)
             for i, chunk in enumerate(chunks[:2]):
-                print(
-                    f" [🚧 TODO: Vectorize] Chunk {i}:"
-                    f"{chunk.page_content[:50]}..."
-                )
+                print(f" [🚧 TODO: Vectorize] Chunk {i}:{chunk.page_content[:50]}...")
 
             # 4. 返却 (将来的にベクトルDBのメタデータなどを含める)
             return {
                 "status": "success",
                 "tenant_id": tenant_id,
                 "file_path": file_path,
-                "chunks_count": len(chunks)
+                "chunks_count": len(chunks),
             }
 
         except ValueError as e:

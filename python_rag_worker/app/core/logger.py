@@ -8,7 +8,7 @@ def init_logger() -> None:
     """アプリケーション全体のログ設定を初期化する"""
 
     # ルートロガーのフォーマット設定
-    log_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 
     logging.basicConfig(
         level=logging.INFO,
@@ -17,7 +17,7 @@ def init_logger() -> None:
             # sys.stdout へ出力することで、コンテナ環境でのログ収集
             # （FluentbitやCloud Loggingなど）と親和性を高める
             logging.StreamHandler(sys.stdout)
-        ]
+        ],
     )
 
     # 起動時の確認用ログ

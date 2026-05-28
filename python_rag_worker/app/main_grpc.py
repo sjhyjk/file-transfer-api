@@ -47,6 +47,7 @@ async def main() -> None:
     # 6. 停止処理（Graceful Shutdown）
     await server_manager.stop(grace=5)
 
+
 if __name__ == "__main__":
     # Python 3.14 の標準的な非同期エントリ実行
     asyncio.run(main())
