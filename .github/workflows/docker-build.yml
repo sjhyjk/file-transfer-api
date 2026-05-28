@@ -37,6 +37,14 @@ jobs:
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+    # 💡 Go専用のprotocプラグイン（go / go-grpc）をCI環境にインストール
+    - name: Install Protoc Go Plugins
+      run: |
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+        # インストールしたバイナリのある場所にパスを通す
+        echo "$HOME/go/bin" >> $GITHUB_PATH
+
     # 💡 GitHub上の空フォルダ(pb)に、その場でgRPCコードを復元・自動生成する
     - name: Generate gRPC Codes
       run: make gen-proto
