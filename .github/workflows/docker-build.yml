@@ -88,6 +88,15 @@ jobs:
       uses: golangci/golangci-lint-action@v9
       with:
         version: latest
+    
+    # 🐍 ステップ2.5: Python 静的解析 & 型チェック
+    # すでに上のステップで pip install grpcio-tools や ruff, mypy が入る状態を作ります
+    - name: Python Quality Check (Ruff & Mypy)
+      run: |
+        # CI環境に必要なリンターと型チェッカーをインストール
+        python3 -m pip install ruff mypy
+        # 動的切り替え対応の Makefile タスクを呼び出す
+        make lint-python
 
     # ✅ ステップ3: ユニットテスト（モック環境）の実行
     # これが失敗すると、下のビルドやデプロイは実行されません（安全！）
@@ -165,4 +174,4 @@ jobs:
           STORAGE_TYPE=gcs
           GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
           BUCKET_NAME=file-transfer-bucket-syou-20240121
-          DATABASE_URL=postgres://app_user:${{ secrets.DB_PASSWORD }}@/transfer_metadata?host==%2Fcloudsql%2F${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
+          DATABASE_URL=postgres://app_user:${{ secrets.DB_PASSWORD }}@/transfer_metadata?host=%2Fcloudsql%2F${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db

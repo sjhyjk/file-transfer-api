@@ -1,0 +1,59 @@
+[tool.ruff]
+# 対象とするPythonのバージョン
+target-version = "py314"
+line-length = 88
+
+# 解析対象に含める/除外するディレクトリ
+src = ["app"]
+extend-exclude = [
+    "**/pb/*_pb2.py",
+    "**/pb/*_pb2_grpc.py",
+    "**/pb/*_pb2.pyi"
+]
+
+[tool.ruff.lint]
+# 使用するルールセットの定義
+# E, W: PEP8 (コードスタイル)
+# F: Pyflakes (論理的なバグ・未使用変数)
+# I: isort (インポート順序の強制)
+# B: flake8-bugbear (潜在的なバグの検知)
+# UP: pyupgrade (モダンな構文への自動変換)
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = []
+
+[tool.ruff.lint.isort]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+# 独自のインポート順序設定（FastAPI や LangChain を見やすく）
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.14" # ランタイム環境と一致
+mypy_path = "app"
+exclude = ["^app/pb/.*$"]
+
+disallow_untyped_defs = true
+check_untyped_defs = true
+strict = true
+strict_optional = true
+warn_return_any = true
+warn_unused_configs = true
+explicit_package_bases = true
+
+# 自動生成コードの型エラーは完全に無視
+[[tool.mypy.overrides]]
+module = "app.pb.*"
+ignore_errors = true
+
+# サードパーティライブラリの型定義不足警告を抑制
+[[tool.mypy.overrides]]
+module = [
+    "grpc",
+    "grpc.aio",
+    "uvicorn",
+    "pydantic.*",
+    "fastapi.*",
+    "langchain.*",
+    "langchain_community.*",
+    "langchain_openai.*"
+]
+ignore_missing_imports = true

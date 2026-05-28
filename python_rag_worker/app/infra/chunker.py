@@ -1,17 +1,20 @@
 # python_rag_worker/app/infra/chunker.py
 
 import re
+
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+
 class Chunker:
-    def __init__(self, chunk_size=500, chunk_overlap=50):
+    def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50) -> None:
         self.splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             separators=["\n\n", "\n", "。", "、", " ", ""]
         )
 
-    def split(self, docs):
+    def split(self, docs: list[Document]) -> list[Document]:
         # 💡 分割前に各ドキュメントのテキストをクリーニング
         for doc in docs:
             # 1. 連続する改行・空白を 1 つの改行に集約

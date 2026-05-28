@@ -84,6 +84,20 @@ services:
       - STORAGE_ROOT=/app/storage
       - GRPC_PORT=50051
 
+  # ---------------------------------------------------------------------------
+  # 🔍 5. Static Analysis (Ruff & MyPy) - コードの品質管理者
+  # ---------------------------------------------------------------------------
+  static-analysis:
+    build:
+      context: ./python_rag_worker
+      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      # 💡 重要な最適化: ローカルの /app ではなくプロジェクト構成に合わせて適切に同期
+      - ./python_rag_worker:/app
+    # 普段の docker compose up では余計なリソースを消費させず、明示的に呼び出した時だけ動かす
+    profiles: ["tools"]
+
 volumes:
   postgres_data: # DBの中身を消さないためのボリューム
   

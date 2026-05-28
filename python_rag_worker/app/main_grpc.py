@@ -3,11 +3,13 @@
 import asyncio
 import logging
 import signal
-from core.logger import init_logger
+
 from api.grpc_server import GRPCServerManager
+from core.logger import init_logger
 from services.rag_service import RAGService
 
-async def main():
+
+async def main() -> None:
     # 1. ログの一元初期化
     init_logger()
     logger = logging.getLogger("rag-worker")
@@ -26,7 +28,7 @@ async def main():
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
 
-    def shutdown_signal_handler():
+    def shutdown_signal_handler() -> None:
         logger.info("🚨 Shutdown signal received.")
         stop_event.set()
 

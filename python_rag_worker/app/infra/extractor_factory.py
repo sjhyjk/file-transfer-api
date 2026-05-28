@@ -1,14 +1,17 @@
 # python_rag_worker/app/infra/extractor_factory.py
 
 import os
-from .extractors.pdf_extractor import PDFExtractor
+
+from .extractors.base import BaseExtractor
 from .extractors.excel_extractor import ExcelExtractor
-from .extractors.word_extractor import WordExtractor
+from .extractors.pdf_extractor import PDFExtractor
 from .extractors.pptx_extractor import PPTXExtractor
 from .extractors.text_extractor import TextExtractor
+from .extractors.word_extractor import WordExtractor
+
 
 class ExtractorFactory:
-    _mapping = {
+    _mapping: dict[str, type[BaseExtractor]] = {
         ".pdf": PDFExtractor,
         ".xlsx": ExcelExtractor,
         ".xls": ExcelExtractor,
@@ -18,11 +21,11 @@ class ExtractorFactory:
     }
 
     @classmethod
-    def get_extractor(cls, file_path: str):
+    def get_extractor(cls, file_path: str) -> BaseExtractor:
         ext = os.path.splitext(file_path)[1].lower()
         extractor_class = cls._mapping.get(ext)
-        
+
         if not extractor_class:
             raise ValueError(f"❌ Unsupported file extension: {ext}")
-            
+
         return extractor_class()

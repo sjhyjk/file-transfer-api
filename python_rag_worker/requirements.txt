@@ -17,3 +17,5 @@ python-pptx     # PPTXの解析実体
 networkx
 pandas
 msoffcrypto-tool
+ruff
+mypy
