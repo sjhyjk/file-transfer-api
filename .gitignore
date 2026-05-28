@@ -11,7 +11,8 @@ gcp-key.json
 *.test
 
 # 💡 gRPC / Protocol Buffers のGo側自動生成コード
-internal/handler/grpc/pb/*.pb.go
+internal/handler/grpc/pb/*
+!internal/handler/grpc/pb/.gitkeep
 
 # (参考) OpenAPIからコードを毎回自動生成して上書きする運用にする場合は以下も除外
 # internal/handler/api.gen.go
@@ -27,8 +28,8 @@ vendor/
 **/env/
 
 # gRPCの自動生成コードはMakefileで生成するためGit管理外にする
-**/app/pb/*_pb2.py
-**/app/pb/*_pb2_grpc.py
+python_rag_worker/app/pb/*
+!python_rag_worker/app/pb/.gitkeep
 
 # Pythonのキャッシュ
 **/__pycache__/
