@@ -13,13 +13,13 @@ logger = logging.getLogger("rag-worker")
 router = APIRouter()
 
 
-@router.get("/health", tags=["Infrastructure"])
+@router.get("/health", tags=["Infrastructure"]) # type: ignore[untyped-decorator]
 def health() -> dict[str, str]:
     """インフラ監視用のヘルスチェックエンドポイント"""
     return {"status": "ok"}
 
 
-@router.post("/ingest", tags=["Pipeline"])
+@router.post("/ingest", tags=["Pipeline"]) # type: ignore[untyped-decorator]
 async def ingest_notification(request: Request) -> Any:
     """HTTP 経由のファイルアップロード完了通知を受付"""
     try:

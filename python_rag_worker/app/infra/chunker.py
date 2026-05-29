@@ -1,6 +1,7 @@
 # python_rag_worker/app/infra/chunker.py
 
 import re
+from typing import cast
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -22,4 +23,4 @@ class Chunker:
             # 2. 文頭・文末の余計な空白を削除
             doc.page_content = doc.page_content.strip()
 
-        return self.splitter.split_documents(docs)
+        return cast(list[Document], self.splitter.split_documents(docs))
