@@ -45,15 +45,19 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     # 💡 Go と Python 両方の gRPC 生成プラグインをインストールする
-    - name: Install Protoc Go Plugins
+    - name: Install Protoc Plugins & Python Tools
       run: |
+        # Go 用プラグインのインストール
         go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
         go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
         # インストールしたバイナリのある場所にパスを通す
         echo "$HOME/go/bin" >> $GITHUB_PATH
 
-        # 🐍 Python 用の gRPC 生成ツールをインストール
-        python3 -m pip install grpcio-tools
+        # 🐍 Python 用ツール・ライブラリのインフラを一括集約インストール
+        # grpcio-tools: コード生成用
+        # mypy-protobuf: proto から .pyi (型定義) を生成するプラグイン
+        # ruff / mypy: 静的解析・型チェック用
+        python3 -m pip install grpcio-tools mypy-protobuf ruff mypy
 
     # 💡 GitHub上の空フォルダ(pb)に、その場でgRPCコードを復元・自動生成する
     - name: Generate gRPC Codes
@@ -93,8 +97,6 @@ jobs:
     # すでに上のステップで pip install grpcio-tools や ruff, mypy が入る状態を作ります
     - name: Python Quality Check (Ruff & Mypy)
       run: |
-        # CI環境に必要なリンターと型チェッカーをインストール
-        python3 -m pip install ruff mypy
         # 動的切り替え対応の Makefile タスクを呼び出す
         make lint-python
 
