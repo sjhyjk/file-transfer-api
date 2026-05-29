@@ -8,7 +8,8 @@ src = ["app"]
 extend-exclude = [
     "**/pb/*_pb2.py",
     "**/pb/*_pb2_grpc.py",
-    "**/pb/*_pb2.pyi"
+    "**/pb/*_pb2.pyi",
+    "**/pb/*_pb2_grpc.pyi"
 ]
 
 [tool.ruff.lint]
@@ -29,7 +30,9 @@ known-first-party = ["app"]
 [tool.mypy]
 python_version = "3.14" # ランタイム環境と一致
 mypy_path = "app"
-exclude = ["^app/pb/.*$"]
+
+namespace_packages = true
+explicit_package_bases = true
 
 disallow_untyped_defs = true
 check_untyped_defs = true
@@ -37,11 +40,10 @@ strict = true
 strict_optional = true
 warn_return_any = true
 warn_unused_configs = true
-explicit_package_bases = true
 
 # 自動生成コードの型エラーは完全に無視
 [[tool.mypy.overrides]]
-module = "app.pb.*"
+module = "pb.*"
 ignore_errors = true
 
 # サードパーティライブラリの型定義不足警告を抑制

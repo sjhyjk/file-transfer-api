@@ -5,8 +5,8 @@ API_CONFIG = api/config.yaml
 API_PROTO = api/proto/file.proto
 
 # 💡 ローカルの仮想環境（venv）内にツールがあればそれを優先し、なければシステム標準（CI等）を使う動的定義
-RUFF := $(shell if [ -f ./python_rag_worker/venv/bin/ruff ]; then echo "./python_rag_worker/venv/bin/ruff"; else echo "ruff"; fi)
-MYPY := $(shell if [ -f ./python_rag_worker/venv/bin/mypy ]; then echo "./python_rag_worker/venv/bin/mypy"; else echo "mypy"; fi)
+RUFF := $(shell if [ -f ./venv/bin/ruff ]; then echo "./venv/bin/ruff"; else echo "ruff"; fi)
+MYPY := $(shell if [ -f ./venv/bin/mypy ]; then echo "./venv/bin/mypy"; else echo "mypy"; fi)
 
 .PHONY: help
 help: ## ヘルプを表示
@@ -43,6 +43,8 @@ gen-proto-python: ## Python 用の gRPC コードを生成
 		--proto_path=. \
 		--python_out=. \
 		--grpc_python_out=. \
+		--mypy_out=. \
+		--mypy_grpc_out=. \
 		./pb/$(notdir $(API_PROTO))
 	
 	# 🔥 生成が終わったら、二重管理にならないよう元の .proto コピーだけを綺麗に削除
@@ -52,17 +54,17 @@ gen-proto-python: ## Python 用の gRPC コードを生成
 .PHONY: lint-python
 lint-python: ## Python用の静的解析と型チェックを実行
 	@echo "🐍 Running Ruff Linter..."
-	$(RUFF) check python_rag_worker/app
+	cd python_rag_worker && $(RUFF) check app
 	@echo "🐍 Running Ruff Formatter (Check mode)..."
-	$(RUFF) format --check python_rag_worker/app
+	cd python_rag_worker && $(RUFF) format --check app
 	@echo "🐍 Running mypy Type Checker..."
-	$(MYPY) python_rag_worker/app
+	cd python_rag_worker && $(MYPY) app
 
 .PHONY: format-python
 format-python: ## Python用のコード自動整形を実行
 	@echo "🧹 Formatting Python code with Ruff..."
-	$(RUFF) format python_rag_worker/app
-	$(RUFF) check --fix python_rag_worker/app
+	cd python_rag_worker && $(RUFF) format app
+	cd python_rag_worker && $(RUFF) check app --select I --fix
 
 # 🐳 Dockerコンテナを使って解析したい場合はこちらを叩く
 .PHONY: docker-lint-python

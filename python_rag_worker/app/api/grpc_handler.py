@@ -2,12 +2,13 @@
 
 import logging
 import os
+from collections.abc import AsyncIterator
 from typing import Any
 
 import grpc
+
 import pb.file_pb2 as file_pb2
 import pb.file_pb2_grpc as file_pb2_grpc
-
 from core.config import settings
 
 logger = logging.getLogger("rag-worker")
@@ -58,7 +59,7 @@ class FileServiceServicer(file_pb2_grpc.FileServiceServicer):
             result = await self.rag_service.run_pipeline(tenant_id, full_path)
 
             if result.get("status") == "success":
-                return file_pb2.FileIngestResponse(  # type: ignore
+                return file_pb2.FileIngestResponse(
                     status="success",
                     message=(
                         f"Successfully processed RAG pipeline via gRPC. "
@@ -80,3 +81,27 @@ class FileServiceServicer(file_pb2_grpc.FileServiceServicer):
             logger.error(f"💥 [gRPC NotifyIngest] Unexpected error: {e}")
             # エラー時は gRPC のステータスコードを適切に変えて返却
             await context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+    async def UploadFile(
+        self,
+        request_iterator: AsyncIterator[file_pb2.UploadFileRequest],
+        context: grpc.aio.ServicerContext,
+    ) -> file_pb2.UploadFileResponse:
+        """Python側では未実装のため、UNIMPLEMENTEDを返却"""
+        await context.abort(
+            grpc.StatusCode.UNIMPLEMENTED, "Method not implemented in Python worker"
+        )
+        # 💡 Mypyの [return] エラーを消すため、ダミーの戻り値（または例外）を明示します
+        raise NotImplementedError("Method not implemented in Python worker")
+
+    async def ListFiles(
+        self,
+        request: file_pb2.ListFilesRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> file_pb2.ListFilesResponse:
+        """Python側では未実装のため、UNIMPLEMENTEDを返却"""
+        await context.abort(
+            grpc.StatusCode.UNIMPLEMENTED, "Method not implemented in Python worker"
+        )
+        # 💡 Mypyの [return] エラーを消すため、ダミーの戻り値（または例外）を明示します
+        raise NotImplementedError("Method not implemented in Python worker")

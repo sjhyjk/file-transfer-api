@@ -4,12 +4,13 @@ import logging
 from typing import Any
 
 import grpc
-import pb.file_pb2_grpc as file_pb2_grpc
 
+import pb.file_pb2_grpc as file_pb2_grpc
 from api.grpc_handler import FileServiceServicer
 from core.config import settings
 
 logger = logging.getLogger("rag-worker")
+
 
 class GRPCServerManager:
     """gRPC サーバーのライフサイクル（起動・停止）を専門に管理するコンポーネント"""
@@ -26,7 +27,7 @@ class GRPCServerManager:
         # ハンドラー（サービサー）に共通の RAGService を注入してアタッチ
         file_pb2_grpc.add_FileServiceServicer_to_server(
             FileServiceServicer(rag_service=self.rag_service), self._server
-        )  # type: ignore
+        )
 
         listen_addr = f"0.0.0.0:{settings.grpc_port}"
         self._server.add_insecure_port(listen_addr)
