@@ -1,6 +1,7 @@
 # python_rag_worker/app/infra/extractors/text_extractor.py
 
 from typing import cast
+
 from langchain_community.document_loaders import TextLoader
 from langchain_core.documents import Document
 

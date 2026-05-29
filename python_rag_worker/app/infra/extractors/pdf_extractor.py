@@ -1,6 +1,7 @@
 # python_rag_worker/app/infra/extractors/pdf_extractor.py
 
 from typing import cast
+
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
 

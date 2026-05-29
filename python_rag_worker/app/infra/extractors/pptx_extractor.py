@@ -1,6 +1,7 @@
 # python_rag_worker/app/infra/extractors/pptx_extractor.py
 
 from typing import cast
+
 from langchain_community.document_loaders import UnstructuredPowerPointLoader
 from langchain_core.documents import Document
 
