@@ -34,13 +34,6 @@ jobs:
         go-version: '1.25'
         cache: true        # 依存関係のキャッシュを有効化して、さらに高速化
 
-    # 🔥 コード生成前の「真っ新な状態」で開発者の更新漏れをチェック
-    # =================================================================
-    - name: Check go.mod tidy before code generation
-      run: |
-        go mod tidy
-        git diff --exit-code go.mod go.sum || (echo "🚨 Error: Please run 'go mod tidy' locally and commit the changes!" && exit 1)
-
     # 💡 CI環境へ protoc コマンドをインストールする
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
@@ -56,13 +49,21 @@ jobs:
         # インストールしたバイナリのある場所にパスを通す
         echo "$HOME/go/bin" >> $GITHUB_PATH
 
+        # 🐍 Python 用コンパイルツールのインストール
+        pip install grpcio-tools mypy-protobuf
+
     # 💡 GitHub上の空フォルダ(pb)に、その場でgRPCコードを復元・自動生成する
     - name: Generate gRPC Codes
       run: make gen-proto
 
-    # 💡 自動生成によって生じた go.mod の変化を、ステップを跨いで永続化させる
-    - name: Tidy Dependencies after Generation
-      run: go mod tidy
+    # 🔥 コード生成が完了した最新状態で、依存関係の同期と更新漏れを一括チェック
+    # =================================================================
+    - name: Check go.mod tidy after code generation
+      run: |
+        # 自動生成コードが必要とする外部モジュールを go.mod に最終同期させる
+        go mod tidy
+        # ローカルで 'make gen-proto' と 'go mod tidy' が両方正しく実行されていたかを検証
+        git diff --exit-code go.mod go.sum || (echo "🚨 Error: Please run 'make gen-proto' followed by 'go mod tidy' locally to update pb files and dependencies, then commit the changes!" && exit 1)
 
 # --- ここから「Push時」にも必ず走る高品質化ステップ ---
     # ==========================================
