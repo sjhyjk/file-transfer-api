@@ -20,7 +20,7 @@ type GCSRepository struct {
 // NewGCSRepository は初期化関数です（main.goなどで呼び出します）
 func NewGCSRepository(ctx context.Context, bucketName string) (*GCSRepository, error) {
 
-	// 🚀 修正：opts はもう不要。そのまま NewClient を呼ぶ
+	// 🚀 opts はもう不要。そのまま NewClient を呼ぶ
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("GCSクライアントの作成に失敗: %w", err)

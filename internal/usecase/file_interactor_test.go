@@ -19,7 +19,7 @@ type benchMockRepo struct{}
 // Saveの実装
 func (m *benchMockRepo) Save(ctx context.Context, n string, r io.Reader) error { return nil }
 
-// ✅ これを追加：本物の GCS リポジトリが Close を持っているので、
+// 本物の GCS リポジトリが Close を持っているので、
 // インターフェースを満たすためにモックにも定義します。
 func (m *benchMockRepo) Close() error {
 	return nil

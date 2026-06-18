@@ -16,7 +16,7 @@ components:
     # cmd/api/main.go などを「実行プログラム」として定義
     in: cmd/**
   
-  # 🚀 [追加] ルート直下のファイルを common として定義
+  # ルート直下のファイルを common として定義
   common:
     in: .
 
@@ -37,18 +37,18 @@ deps:
       - infra      # infra内のサブパッケージ間（factoryからgcsなど）の参照を許可
       - common     # DBマイグレーションで assets.go を使うため追加
   app:
-  # 🚀 [追加] すべてのコンポーネントから common への依存を許可する
+  # すべてのコンポーネントから common への依存を許可する
   # (assets.go はどこからでも参照される可能性があるため)
     mayDependOn:
       - domain
       - usecase
       - infra
-      - common # ここを追加
+      - common
 
 # 3. 除外設定（必要に応じて）
 exclude:
   - vendor
   - "**/*_test.go"
-  - "archives/**" # ★ ここを追加（archives配下のファイルを完全に無視する）
+  - "archives/**" # archives配下のファイルを完全に無視する
   - "internal/**" # 🚀 commonがinternalの中身まで拾わないように除外
   - "cmd/**"      # 🚀 commonがcmdの中身まで拾わないように除外

@@ -1,21 +1,30 @@
+# --- Web & API Core ---
 fastapi
 uvicorn[standard]
+
+# --- gRPC Messaging ---
 grpcio
 grpcio-tools
+google-cloud-pubsub
+
+# --- RAG & LLM Frameworks ---
 langchain
+langchain-core
 langchain-community
+langchain-text-splitters
 langchain-openai  # または代替のLLM用ライブラリ
+
+# --- Document Parsers (Unstructured Ecosystem) ---
 openpyxl         # Excel用
 python-docx      # Word用
+docx2txt        # Wordの解析実体
 python-pptx      # PowerPoint用
 pypdf            # PDF抽出用
-python-dotenv
 unstructured    # PPTXやExcelの汎用的な読み込みに必要
-openpyxl        # Excelの解析実体
-docx2txt        # Wordの解析実体
-python-pptx     # PPTXの解析実体
-networkx
-pandas
 msoffcrypto-tool
-ruff
-mypy
+
+# --- Data Science & Utilities ---
+
+pandas
+networkx
+python-dotenv

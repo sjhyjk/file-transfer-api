@@ -10,7 +10,7 @@ type FileMetadata struct {
 	ID        int64
 	FileName  string
 	FileSize  int64
-	TenantID  string // 🚀 REST/gRPCのマルチテナント要件をドメイン層でも担保するために追加
+	TenantID  string // 🚀 HTTP/gRPCのマルチテナント要件をドメイン層でも担保するために追加
 	Status    TransferStatus
 	Source    string   // e.g., "manual_upload", "system_generated"
 	Tags      []string // ★ RAG等の検索要件のため

@@ -77,7 +77,7 @@ func (r *Repository) SaveMetadata(ctx context.Context, f *domain.FileMetadata) e
 		return fmt.Errorf("failed to insert metadata: %w", err)
 	}
 
-	// ✨ 成功ログを追加
+	// ✨ 成功ログ
 	// 保存後の ID をログに出すことで、フロントエンドのログと DB の中身を即座に紐付けられます
 	slog.InfoContext(ctx, "Metadata saved successfully",
 		"db_id", f.ID,

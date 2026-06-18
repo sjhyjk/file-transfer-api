@@ -9,6 +9,7 @@ gcp-key.json
 /main
 *.exe
 *.test
+bin/api
 
 # 💡 gRPC / Protocol Buffers のGo側自動生成コード
 internal/handler/grpc/pb/*
@@ -21,11 +22,16 @@ internal/handler/grpc/pb/*
 # Goのツール
 vendor/
 
-# --- Python 関連 (★追加) ---
+# --- Python 関連 ---
 # ローカルの仮想環境を絶対にコミットしない
 **/venv/
 **/.venv/
 **/env/
+
+# PythonのLinter/型チェッカー/テストツールのキャッシュ
+**/.mypy_cache/
+**/.ruff_cache/
+**/.pytest_cache/
 
 # gRPCの自動生成コードはMakefileで生成するためGit管理外にする
 python_rag_worker/app/pb/*
@@ -39,9 +45,6 @@ python_rag_worker/app/pb/*
 # コンテナ内のデータがホスト側にマウントされるディレクトリ
 # これをコミットすると、テストで使ったゴミファイルが他人の環境に混ざります
 storage/
-
-# --- 開発用の一時ファイル ---
-*.log
 
 # --- Terraform 関連 (機密情報とバイナリ) ---
 # プラグインなどの実行バイナリ
@@ -63,3 +66,4 @@ test.txt
 .idea/
 .DS_Store
 Thumbs.db
+.cache/

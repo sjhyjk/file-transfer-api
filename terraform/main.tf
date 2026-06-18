@@ -15,7 +15,9 @@ provider "google" {
   region  = "us-west1"
 }
 
-# --- Storage (GCS) ---
+# ---------------------------------------------------------------------------
+# 📦 Storage (GCS)
+# ---------------------------------------------------------------------------
 
 # 既存のバケットを管理対象にするための定義
 resource "google_storage_bucket" "file_transfer_bucket" {
@@ -34,6 +36,7 @@ resource "google_storage_bucket" "python_test_bucket" {
   name          = "python-bench-bucket-${var.project_id}"
   location      = "US-WEST1"
   force_destroy = true
+  uniform_bucket_level_access = true
   public_access_prevention = "enforced"
 }
 
@@ -42,43 +45,69 @@ resource "google_storage_bucket" "rag_source_bucket" {
   name          = "rag-source-${var.project_id}"
   location      = "US-WEST1"
   force_destroy = true
+  uniform_bucket_level_access = true
 
   # RAGの機密データを守るための必須設定
   public_access_prevention = "enforced"
 }
 
-# ==========================================
-# 新規追加：権限分離のための IAM 設定
-# ==========================================
+# ---------------------------------------------------------------------------
+# 🔐 IAM & Service Account (Runtime & CI/CD)
+# ---------------------------------------------------------------------------
 
-# 1. Cloud Run 実行専用のサービスアカウント (Runtime SA)
+# Cloud Run 実行専用のサービスアカウント (Runtime SA)
 resource "google_service_account" "app_runtime_sa" {
   account_id   = "file-transfer-app-runtime"
   display_name = "Cloud Run App Runtime Service Account"
 }
 
-# 2. メインのバケットへのオブジェクト操作権限付与
+# メインのバケットへのオブジェクト操作権限付与
 resource "google_storage_bucket_iam_member" "main_bucket_access" {
   bucket = google_storage_bucket.file_transfer_bucket.name
   role   = "roles/storage.objectAdmin" # 読み書き可能、バケット削除は不可
   member = "serviceAccount:${google_service_account.app_runtime_sa.email}"
 }
 
-# 3. RAGソースバケットへの「読み取り専用」権限（さらに絞る例）
+# RAGソースバケットへの「読み取り専用」権限（さらに絞る例）
 resource "google_storage_bucket_iam_member" "rag_bucket_viewer" {
   bucket = google_storage_bucket.rag_source_bucket.name
   role   = "roles/storage.objectViewer" # 読み取りのみ
   member = "serviceAccount:${google_service_account.app_runtime_sa.email}"
 }
+
+# GitHub Actions がデプロイとプッシュを行うための権限付与群
+# サービスアカウント自身が自分を Cloud Run に割り当てるための権限
+resource "google_project_iam_member" "sa_user" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${google_service_account.app_runtime_sa.email}"
+}
+
+# Artifact Registry への書き込み（Push）権限
+resource "google_project_iam_member" "artifact_registry_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${google_service_account.app_runtime_sa.email}"
+}
+
+# Cloud Run の管理者権限（デプロイ実行に必要）
+resource "google_project_iam_member" "cloudrun_developer" {
+  project = var.project_id
+  role    = "roles/run.developer"
+  member  = "serviceAccount:${google_service_account.app_runtime_sa.email}"
+}
+
+# ---------------------------------------------------------------------------
+# 🗄️ Database (Cloud SQL)
+# ---------------------------------------------------------------------------
+
 /*
-# 4. Cloud SQL への接続権限 (Cloud SQL クライアント)
+# Cloud SQL への接続権限 (Cloud SQL クライアント)
 resource "google_project_iam_member" "sql_client" {
   project = var.project_id
   role    = "roles/cloudsql.client"
   member  = "serviceAccount:${google_service_account.app_runtime_sa.email}"
 }
-
-# --- Database (Cloud SQL) ---
 
 # Cloud SQL インスタンス
 resource "google_sql_database_instance" "postgres" {
@@ -144,11 +173,11 @@ resource "google_iam_workload_identity_pool_provider" "github_provider" {
     "attribute.repository" = "assertion.repository"
     "attribute.owner"      = "assertion.repository_owner"
     "attribute.refs"       = "assertion.ref"
-    "attribute.actor"            = "assertion.actor"
-    "attribute.aud"              = "assertion.aud"
+    "attribute.actor"      = "assertion.actor"
+    "attribute.aud"        = "assertion.aud"
   }
   
-  # ここを追加：特定のリポジトリ以外からのアクセスを入り口で弾く設定
+  # 特定のリポジトリ以外からのアクセスを入り口で弾く設定
   # これにより、GCP側が求める「Claimsの参照」を完全に満たします。
   attribute_condition = "assertion.repository == 'sjhyjk/file-transfer-api'"
 
@@ -163,4 +192,50 @@ resource "google_service_account_iam_member" "workload_identity_user" {
   service_account_id = google_service_account.app_runtime_sa.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/sjhyjk/file-transfer-api"
+}
+
+# ==========================================
+# Pub/Sub メッセージング基盤
+# ==========================================
+
+# 1. Goアプリがイベントをパブリッシュするトピック
+resource "google_pubsub_topic" "file_ingest_topic" {
+  name = var.pubsub_topic_id
+
+  labels = {
+    environment = "production"
+    managed_by  = "terraform"
+  }
+}
+
+# 2. Pythonワーカーがメッセージをプルするサブスクリプション
+resource "google_pubsub_subscription" "file_ingest_sub" {
+  name  = "file-ingest-sub"
+  topic = google_pubsub_topic.file_ingest_topic.name
+
+  # 確認応答（Ack）の締め切り：RAGのパース処理時間を考慮して少し長めの60秒に設定
+  ack_deadline_seconds = 60
+
+  # メッセージの保持期間（デフォルト7日間）
+  message_retention_duration = "604800s"
+
+  # 冪等性を担保するためのリトライポリシー（必要に応じて調整）
+  retry_policy {
+    minimum_backoff = "10s"
+    maximum_backoff = "600s"
+  }
+}
+
+# 3. 権限付与：Goアプリ（Runtime SA）がトピックに「発行」できる権限
+resource "google_pubsub_topic_iam_member" "go_app_publisher" {
+  topic  = google_pubsub_topic.file_ingest_topic.name
+  role   = "roles/pubsub.publisher"
+  member = "serviceAccount:${google_service_account.app_runtime_sa.email}"
+}
+
+# 4. 権限付与：Pythonワーカー（Runtime SA）がサブスクリプションから「購読」できる権限
+resource "google_pubsub_subscription_iam_member" "python_worker_subscriber" {
+  subscription = google_pubsub_subscription.file_ingest_sub.name
+  role         = "roles/pubsub.subscriber"
+  member       = "serviceAccount:${google_service_account.app_runtime_sa.email}"
 }

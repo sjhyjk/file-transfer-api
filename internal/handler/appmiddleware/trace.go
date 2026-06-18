@@ -1,4 +1,4 @@
-// internal/handler/rest/appmiddleware/trace.go
+// internal/handler/appmiddleware/trace.go
 
 package appmiddleware
 
@@ -28,6 +28,25 @@ func TraceMiddleware(next http.Handler) http.Handler {
 		// ID入りの context をセットして次に渡す
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// TraceUnaryServerInterceptor は、単発のUnary RPCに対して Trace ID を付与するミドルウェアです。
+func TraceUnaryServerInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		var traceID string
+
+		// gRPCのメタデータから小文字の x-trace-id を取得（gRPCのメタデータは小文字が標準）
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if ids := md.Get("x-trace-id"); len(ids) > 0 {
+				traceID = ids[0]
+			}
+		}
+
+		// context に trace_id を付与して伝播
+		newCtx := logger.WithTraceID(ctx, traceID)
+
+		return handler(newCtx, req)
+	}
 }
 
 // TraceStreamServerInterceptor は、ストリーミングRPCに対して Trace ID を付与するミドルウェアです。

@@ -29,8 +29,8 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
 - **Domain**: 唯一の **Source of Truth**。インフラの制約から独立した **不変条件(Invariants)** を抽象インターフェースとして定義。全レイヤーの依存が向かう「不動の頂点」として配置し、コアロジックの再利用性を最大化。
 - **Usecase**: `errgroup` を活用した **Fail-fast な並行処理制御** を実装。具象実装を一切参照せず、純粋なビジネスロジック（並行アップロードのオーケストレーション等）に特化。
 - **Infrastructure & Elastic Persistence**: Factory Pattern により、ストレージ (GCS/Local/S3(予定)) やデータベース（Cloud SQL/In-Memory）を動的に切り替える **Plug-and-Play** な構成。今後予定している Redis による分散ロック（冪等性制御）や流量制限 も、既存ロジックに影響を与えずこのレイヤーのアダプター追加のみで対応可能。
-- **Ingest Pipeline (Event-Driven Integration)**: ファイルのライフサイクル変更を契機とする非同期通知基盤。DIP に基づく抽象化により、Python RAG基盤等の外部システムと疎結合に連携。ドメイン層に影響を与えず、 Pub/Sub(予定) を用いたイベント駆動型メッセージングモデルへシームレスに移行可能な構造を実証。
-- **Observability & Lifecycle**: cmd による DI（依存注入）制御により、API/gRPC/CLI の実行形態を柔軟に選択可能。`slog` 拡張により REST/gRPC のプロトコル境界や並行処理の壁を跨いで `context` 内の Trace ID を伝播させ、リクエスト単位の完全なログ追跡（分散トレーシングの布石）を確立。
+- **Ingest Pipeline (Event-Driven Integration)**: ファイルのライフサイクル変更を契機とする非同期通知基盤。DIP に基づく抽象化により、環境変数の切り替えのみで HTTP/gRPC による同期連携から GCP Pub/Sub を用いたイベント駆動型メッセージングモデルへと、シームレスに切り替え可能なアーキテクチャを構築。
+- **Observability & Lifecycle**: 独立した lifecycle マネージャーにより、OSシグナル（SIGTERM/SIGINT）に応じたGraceful Shutdownとリソース解放を一元管理。DI（依存注入）制御により、API/gRPC/CLI の実行形態を柔軟に選択可能。`slog` 拡張によりプロトコル境界（REST/gRPC）や並行処理を跨いだTrace IDのコンテキスト伝播を実現し、リクエスト単位の正確なログ追跡を確立。
 
 ## ⚡ Go の並行処理モデルの実測検証
 
@@ -90,7 +90,7 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
 🏗 Architecture & Reliability
 
 - [x] **マルチプロトコル・アダプターの構築** 🎉 *Done*
-  - **Handler Layer の分離**: 同一の Interactor (Usecase) を Echo (REST) と gRPC の両ハンドラで共用。プロトコル非依存の純粋なビジネスロジックを隔離。
+  - **Handler Layer の分離**: 同一の Interactor (Usecase) を Echo (HTTP) と gRPC の両ハンドラで共用。プロトコル非依存の純粋なビジネスロジックを隔離。
   - **クリーンな入力マッピング**: HTTP クエリパラメータを Domain 層の抽象型（Specification）へ安全にマッピングする玄関口を実装。`limit/offset` によるページネーションバリデーションを全レイヤーで統合。
 
 - [x] **高並行処理における安全なスレッド制御** 🎉 *Done*
@@ -137,6 +137,13 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
   - **最小権限の原則 (Least Privilege)**: サービスアカウントに対し、実行時（Object Admin）と管理時（Storage Admin）の権限を分離。セキュアな IAM 設計を実証。
   - **リソースの廃棄・再作成制御**: `force_destroy` 等の属性定義により、リソースの廃棄・再作成プロセスを宣言的に記述。
 
+- [x] **一気通貫の統合静的解析コンテナの構築** 🎉 *Done*
+  - **言語の壁を越えた検証**: Go（go-arch-lint/golangci-lint）と Python（Ruff/Mypy）の全解析ツールを1つの軽量コンテナ環境へ統合。
+  - **キャッシュの永続化**: 各LinterのキャッシュをDockerボリュームで永続化し、コンテナ経由でありながらネイティブ同等の高速な解析サイクルを実現。
+
+- [x] **Trivy によるコンテナセキュリティスキャン (DevSecOps)** 🎉 *Done*
+  - **脆弱性の早期検知**: CIパイプラインにおいて `Trivy` を導入。ベースイメージや依存ライブラリの脆弱性（CVE）を自動検知し、商用利用に耐えうるセキュアなサプライチェーンを確立。
+
 ⏩ 次期フェーズ：非機能・ガバナンスの深化
 - [ ] **インフラ制約のデータ抽象化（Policy-Driven Architecture）**: テナントごとのアクセス制限ルールをテーブル化し、ミドルウェアで動的に評価。WAF等の外部インフラ設定に依存しないポータブルなアクセス制御を標準化。
 
@@ -157,9 +164,9 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
   - **ポリモーフィズム設計**: 拡張子を自動判定して適切なパーサーを動的選択する `ExtractorFactory` によるポリモーフィズム設計と、共通設定に基づく `Chunker` を組み合わせた非同期データ加工パイプラインのコアを確立。
 
 💬 Phase 2:メッセージング拡張 [Pub/Sub 抽象化]
-- [ ] **イベント駆動アーキテクチャの導入**
-  - **メッセージングモデルの隠蔽**: GCP Pub/Sub や AWS SNS/SQS 等の外部メッセージブローカーに依存しない、Go のインターフェースを用いた抽象メッセージング層の定義。
-  - **インフラの差し替え可能性**: ドメインイベントのパブリッシュ/サブスクライブをインフラ層から分離し、ローカル環境（Go Channel）とクラウド環境（Managed Pub/Sub）をシームレスに切り替える疎結合アーキテクチャの実証。
+- [x] **イベント駆動アーキテクチャの導入**
+  - **メッセージングモデルの隠蔽**: 外部メッセージブローカーの詳細を隠蔽し、Goの抽象インターフェース（Pipeline/Notifier層）を介した疎結合なメッセージングモデルの定義。
+  - **インフラの差し替え可能性**: 処理パイプラインの切り替え（HTTP/gRPCによる同期処理 ⇄ Pub/Subによる非同期イベント駆動）を環境変数（PIPELINE_TYPE）のみで制御可能にし、さらにローカル検証環境（Emulator）と本番クラウド環境（GCP）をシームレスに切り替える堅牢なインフラ層の実証。
 
 🔒 Phase 3: 分散ロック & 流量制御 [Redis]
 - [ ] **Redis による分散ロックと冪等性制御**
@@ -192,26 +199,31 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
 │   │   ├── repository.go  # 保存(Repo)と通知(Pipeline)の定義
 │   │   └── metadata.go    # RAG連携用の属性定義
 │   ├── usecase/           # Business Logic (並行処理・制御フロー)
-│   │   ├── file_interactor.go       # Goの並行アップロードのコアロジック
-│   │   └── file_interactor_test.go  # ロジックの正当性を保証するテスト
+│   │   ├── file_interactor.go           # Goの並行アップロードのコアロジック
+│   │   └── file_interactor_test.go      # ロジックの正当性を保証するテスト
 │   ├── handler/           # 外部接続（HTTPリクエストの解析・レスポンス生成）
 │   │   ├── api.gen.go     # OpenAPIから自動生成されたボイラープレート
 │   │   ├── grpc/          # gRPC ハンドラー実装 & Reflection 制御
-│   │   │   ├── server.go            # gRPC サーバー起動・管理
-│   │   │   ├── file_handler_grpc.go # gRPC ハンドラー本体
-│   │   │   └── pb/        # protoc生成ファイル
-│   │   │       ├── file.pb.go
-│   │   │       └── file_grpc.pb.go
-│   │   └── rest/          # Echo (REST) ハンドラー
-│   │       ├── file_handler_http.go
-│   │       ├── router.go      # ルーティング・ミドルウェア設定
-│   │       └── appmiddleware/ # アプリ固有のミドルウェア（Trace ID注入等）
-│   │           └── trace.go   # Trace ID注入等の共通前処理
+│   │   │   ├── server.go                # gRPC サーバー起動・管理
+│   │   │   ├── file_handler.go     # gRPC ハンドラー本体
+│   │   │   ├── converter.go             # ドメインモデル と gRPC(Protobuf) の相互型変換ロジック
+│   │   │   └── pb/        # protoc生成ファイル (file_grpc.pb.go, file.pb.go)
+│   │   ├── http/          # Echo (REST) ハンドラー
+│   │   │   ├── file_handler.go
+│   │   │   ├── router.go                # ルーティング・ミドルウェア設定
+│   │   │   └── appmiddleware/           # アプリ固有のミドルウェア（Trace ID注入等）
+│   │   │       └── trace.go             # Trace ID注入等の共通前処理
+│   │   ├── pubsub/        # GCP Pub/Sub イベントのメッセージハンドラー
+│   │   │   └── publisher.go             # イベントパブリッシュの仲介
+│   │   └── appmiddleware/          # アプリ固有のミドルウェア（Trace ID注入等）
+│   │           └── trace.go             # Trace ID注入等の共通前処理
 │   ├── infra/             # Infrastructure Adapters (技術的詳細の実装)
 │   │   ├── factory.go     # インフラ切り替えの司令塔
 │   │   ├── pipeline/      # External Integration (RAG基盤等へのイベント通知)
-│   │   │   ├── grpc_notifier.go  # Python API への gRPC 通知実装
-│   │   │   └── http_notifier.go  # Python API への HTTP 通知実装
+│   │   │   ├── grpc_notifier.go         # Python API への gRPC 通知実装
+│   │   │   ├── http_notifier.go         # Python API への HTTP 通知実装
+│   │   │   ├── pubsub_notifier.go       # Python API への Pub/Sub 通知実装
+│   │   │   └── json_dto.go              # 外部通知用メッセージ（JSON Data Transfer Object）の定義
 │   │   ├── gcs/           # GCS 具象実装（Workload Identity 対応） (STORAGE_TYPE=GCS)
 │   │   │   └── gcs_repository.go
 │   │   ├── local/         # ローカルファイルシステム実装 (STORAGE_TYPE=LOCAL)
@@ -223,38 +235,47 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
 │   │   │   └── migrations.go            # golang-migrate 実行ロジック
 │   │   └── inmemory/  # 高速な検証を可能にするインメモリDB実装
 │   │        └── memory_repository.go
-│   └── pkg/               # ユーティリティ・基盤共通パッケージ
-│       ├── config/        # 設定ロード (config.go)
-│       └── logger/        # 構造化ログ（slog）基盤。Trace IDの伝播を管理
-│           ├── context.go
-│           └── handler.go
+│   ├── lifecycle/         # アプリケーションの起動・終了・シグナル制御を一元管理
+│   │   └── lifecycle.go                 # Graceful Shutdown およびコンポーネントのライフサイクル制御
+│   ├── pkg/               # ユーティリティ・基盤共通パッケージ
+│   │   ├── config/        # 設定ロード (config.go)
+│   │   └── logger/        # 構造化ログ（slog）基盤。Trace IDの伝播を管理
+│   │       ├── context.go
+│   │       └── handler.go
+│   └── tools/             # 開発ツール・解析環境の管理
+│       ├── tools.go                     # Go製ツールのバージョン固定用ファイル
+│       └── analysis/                    # Go/Python 一気通貫の静的解析コンテナ環境
+│           ├── Dockerfile               # 静的解析専用の自作Dockerfile
+│           └── requirements-dev.txt
 │
 ├── python_rag_worker/     # Python RAG 基盤
 │   ├── app/               # アプリケーションの構成とDIの起点
-│   │   ├── main_http.py             # HTTPワーカー専用エントリーポイント（FastAPI）
-│   │   ├── main_grpc.py             # gRPCワーカー専用エントリーポイント（Async gRPC）
+│   │   ├── main_http.py                 # HTTPワーカー専用エントリーポイント（FastAPI）
+│   │   ├── main_grpc.py                 # gRPCワーカー専用エントリーポイント（Async gRPC）
+│   │   ├── main_pubsub.py               # Pub/Subイベント駆動ワーカー専用エントリーポイント
 │   │   ├── api/           # ハンドラー層（外部リクエストの解釈とルーティング）
-│   │   │   ├── http_handler.py      # HTTPエンドポイント・ヘルスチェック
-│   │   │   ├── grpc_handler.py      # gRPCサービサーロジック
-│   │   │   └── grpc_server.py       # gRPCサーバーの純粋なライフサイクル管理
-│   │   ├── pb/            # Python 用 gRPC 生成コード
-│   │   │   ├── file_pb2.py
-│   │   │   └── file_pb2_grpc.py
+│   │   │   ├── http_handler.py          # HTTPエンドポイント・ヘルスチェック
+│   │   │   ├── grpc_handler.py          # gRPCサービサーロジック
+│   │   │   ├── grpc_server.py           # gRPCサーバーの純粋なライフサイクル管理
+│   │   │   ├── pubsub_handler.py        # Pub/Sub
+│   │   │   └── pubsub_server.py         # Pub/Sub
+│   │   ├── pb/            # Python 用 gRPC 生成コード (file_pb2_grpc.py, file_pb2.py)
 │   │   ├── services/      # ユースケース・ドメイン層（パイプラインの定義）
-│   │   │   └── rag_service.py       # オーケストレーションとRAG核心ロジック（HTTP/gRPC共通）
+│   │   │   └── rag_service.py           # オーケストレーションとRAG核心ロジック（HTTP/gRPC共通）
 │   │   ├── infra/         # インフラ層（外部ライブラリの実装詳細）
-│   │   │   ├── extractors/          # 形式ごとの抽出器を格納
-│   │   │   │   ├── base.py          # 共通インターフェース
+│   │   │   ├── extractors/              # 形式ごとの抽出器を格納
+│   │   │   │   ├── base.py              # 共通インターフェース
 │   │   │   │   ├── excel_extractor.py
 │   │   │   │   ├── pdf_extractor.py 
 │   │   │   │   ├── pptx_extractor.py
 │   │   │   │   ├── text_extractor.py
 │   │   │   │   └── word_extractor.py 
-│   │   │   ├── extractor_factory.py # 形式判定と振り分け
-│   │   │   └── chunker.py           # チャンク分割
+│   │   │   ├── extractor_factory.py     # 形式判定と振り分け
+│   │   │   └── chunker.py               # チャンク分割
 │   │   └── core/          # 共通基盤
-│   │       ├── config.py            # 環境変数・設定管理
-│   │       └── logger.py            # ログの一元初期化
+│   │       ├── config.py                # 環境変数・設定管理
+│   │       ├── constants.py             # 
+│   │       └── logger.py                # ログの一元初期化
 │   ├── Dockerfile         # Python 実行環境のコンテナ定義
 │   ├── pyproject.toml     # Python ツールチェーン・静的解析設定
 │   └── requirements.txt   # Python 依存ライブラリ
@@ -275,8 +296,6 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
 # 💡 【Goコード・ビルド関連の塊】
 ├── assets.go              # プロジェクト共通資産（SQL等）の embed 定義
 ├── go.mod                 # 依存関係管理
-├── tools/                 # 開発ツールの依存関係管理
-│   └── tools.go           # ビルドツールのバージョンを固定するための Go ファイル
 │
 # 💡 【環境・コンテナインフラ関連の塊】
 ├── docker-compose.yml     # DB・API, Python Mockの疎結合な依存関係とネットワークを定義
@@ -352,7 +371,7 @@ OpenAPI スキーマから型安全な Go コードを生成します。
 
 ```bash
 # 依存ライブラリの同期
-go mod tidy
+make tidy
 
 # OpenAPI スキーマからハンドラ・型定義を自動生成
 make gen-api
@@ -362,13 +381,16 @@ make gen-api
 開発スタイルに合わせて、以下のいずれかの方法で起動してください。
 
 ```bash
-### 🐳 A. Docker Compose (Recommended)
-# DBリトライ・オートマイグレーションを含めたフル環境を起動
-docker compose up --build
+### 🐳 A. Docker Compose (Most Recommended / Deep Dev Mode)
+# Pub/Subエミュレータの起動、トピック自動注入、Go/Python全コンテナのビルドとログ追跡を一発で全自動実行します
+make dev
 
-### 💻 B. Go Run (Lightweight Mode)
-# 外部インフラに依存せず、インメモリDBとローカルストレージで起動
-STORAGE_TYPE=LOCAL DB_TYPE=INMEMORY go run cmd/api/main.go
+### 💻 B. Go/Python ローカル同時ネイティブ起動 (Hybrid Debug Mode)
+# ポート競合を強制解放し、[Go ➡️ Python(gRPC)] の本命低遅延パイプラインで一括起動
+make run-local-all-grpc-clean
+
+# ポート競合を強制解放し、[Go ➡️ Python(HTTP)] の軽量Webhook連携モードで一括起動
+make run-local-all-http-clean
 ```
 
 ### 3. 動作確認（ヘルスチェック）
@@ -381,11 +403,11 @@ curl http://localhost:8080/health
 コードを変更した際は、以下のコマンドで Go / Python それぞれの厳格な Linter をローカルで実行できます。
 
 ```bash
-# Go 側の Linter 実行
-golangci-lint run
+# ローカルのネイティブツールで全解析（Go & Python venv）を実行
+make lint
 
-# Python 側の Linter & 型チェック実行 (Ruff & Mypy)
-make lint-python
+# 【推奨】PC環境を汚さず、キャッシュの効いたDockerコンテナ経由で全解析を高速実行
+make lint-docker
 ```
 
 ```text

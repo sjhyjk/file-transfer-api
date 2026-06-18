@@ -8,9 +8,10 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
-      - "50051:50051" # Go側のgRPC受付口
+      - "50050:50050" # Go側のgRPC受付口
     environment:
-      - PORT=8080
+      - HTTP_PORT=8080
+      - GRPC_PORT=50050
       - DB_TYPE=SQL
       # 💡 ポイント1: ホスト名を localhost ではなく、サービス名の 'db' に指定
       - DATABASE_URL=postgres://app_user:app_pass@db:5432/transfer_metadata?sslmode=disable
@@ -18,8 +19,12 @@ services:
       - LOCAL_STORAGE_PATH=/app/storage
       - PIPELINE_TYPE=GRPC
       # 🚀 Pythonワーカーの分離に伴い、それぞれの宛先をコンテナ名で指定
-      - PYTHON_RAG_URL=http://rag-worker-http:8000/ingest
+      - PYTHON_RAG_URL=http://rag-worker-http:8081/ingest
       - PYTHON_GRPC_TARGET=rag-worker-grpc:50051
+      - SERVER_MODE=HTTP
+      - GCP_PROJECT_ID=local-project
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - PUBSUB_TOPIC_ID=file-ingest-topic
     volumes:
       # 💡 ポイント2: ローカル保存ファイルの永続化
       - ./storage:/app/storage # Go側は書き込み可能
@@ -46,6 +51,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s # 💡 コンテナ起動直後の最初の10秒間は、ヘルスチェックの失敗をカウントしない猶予期間にする
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -57,13 +63,15 @@ services:
       context: ./python_rag_worker
       dockerfile: Dockerfile
     # 🚀 commandを上書きしてHTTP用のmainを起動
-    command: ["uvicorn", "main_http:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "main_http:app", "--host", "0.0.0.0", "--port", "8081"]
     volumes:
       - ./storage:/app/storage:ro # 💡 読み取り専用(ro)でマウント
+      - ./python_rag_worker/app:/app  # 👑 ソースコードをコンテナ内にリアルタイム同期
     ports:
-      - "8001:8000" # ホスト側の8001番をHTTP窓口とする
+      - "8081:8081" # ホスト側の8001番をHTTP窓口とする
     environment:
       - LOG_LEVEL=info
+      - HTTP_PORT=8081
       - STORAGE_ROOT=/app/storage
 
   # ---------------------------------------------------------------------------
@@ -77,27 +85,99 @@ services:
     command: ["python", "main_grpc.py"]
     volumes:
       - ./storage:/app/storage:ro # 💡 安全のため読み取り専用(ro)で共有
+      - ./python_rag_worker/app:/app
     ports:
-      - "50052:50051" # gRPC専用ポートをそのまま公開
+      - "50051:50051" # gRPC専用ポートをそのまま公開
     environment:
       - LOG_LEVEL=info
-      - STORAGE_ROOT=/app/storage
       - GRPC_PORT=50051
+      - STORAGE_ROOT=/app/storage
 
   # ---------------------------------------------------------------------------
-  # 🔍 5. Static Analysis (Ruff & MyPy) - コードの品質管理者
+  # 🚀 5. Pub/Sub メッセージをトリガーに動く非同期RAGワーカー
   # ---------------------------------------------------------------------------
-  static-analysis:
+  rag-worker-pubsub:
     build:
       context: ./python_rag_worker
       dockerfile: Dockerfile
+    command: ["python", "main_pubsub.py"] # 👈 新しいエントリーポイント
+    restart: on-failure:5 # 💡 エラー終了時、最大5回まで自動でコンテナを再起動する
+    volumes:
+      - ./storage:/app/storage:ro
+      - ./python_rag_worker/app:/app
+    environment:
+      - LOG_LEVEL=info
+      - STORAGE_ROOT=/app/storage
+      - GCP_PROJECT_ID=local-project
+      - PUBSUB_SUBSCRIPTION_ID=file-ingest-sub
+      # 💡 Emulatorを使う場合は指定（本番環境では環境変数を外すだけで自動的にGCPの実リソースに向く）
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085 
+    depends_on:
+      - pubsub-emulator # Emulatorコンテナを建てる場合
+
+  # ---------------------------------------------------------------------------
+  # ☁️ 6. Google Cloud Pub/Sub Emulator-
+  # ---------------------------------------------------------------------------
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    ports:
+      - "8085:8085"
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+
+  # ---------------------------------------------------------------------------
+  # 🛠️ 7. Pub/Sub ローカルリソース自動生成用コンテナ
+  # ---------------------------------------------------------------------------
+  pubsub-init:
+    image: curlimages/curl:latest
+    container_name: file-transfer-api-pubsub-init
+    depends_on:
+      - pubsub-emulator
+    entrypoint: >
+      /bin/sh -c "
+      echo '⏳ Waiting for Pub/Sub Emulator API to be responsive...';
+      until curl -s -X PUT http://pubsub-emulator:8085/v1/projects/local-project/topics/file-ingest-topic -H 'Content-Type: application/json'; do
+        echo '⏳ Connection reset or refused. Retrying in 2 seconds...';
+        sleep 2;
+      done;
+      echo '✅ Topic [file-ingest-topic] created successfully!';
+      curl -s -X PUT http://pubsub-emulator:8085/v1/projects/local-project/subscriptions/file-ingest-sub -H 'Content-Type: application/json' -d '{\"topic\": \"projects/local-project/topics/file-ingest-topic\"}';
+      echo '✨ Subscription [file-ingest-sub] created successfully!';"
+
+  # ---------------------------------------------------------------------------
+  # 🔍 8. 統合静的解析部隊 (Go & Python すべてを一括チェック)
+  # ---------------------------------------------------------------------------
+  static-analysis:
+    build:
+      context: .
+      dockerfile: internal/tools/analysis/Dockerfile
     working_dir: /app
     volumes:
-      # 💡 重要な最適化: ローカルの /app ではなくプロジェクト構成に合わせて適切に同期
-      - ./python_rag_worker:/app
-    # 普段の docker compose up では余計なリソースを消費させず、明示的に呼び出した時だけ動かす
+      - .:/app # プロジェクトルート全体をマウント（Go、Python、.go-arch-lint.yml、pyproject.tomlすべてが見えるように）
+      # 💡 Go と Python(Ruff/Mypy) のキャッシュディレクトリをコンテナ間で永続化
+      - go_build_cache:/root/.cache/go-build
+      - go_mod_cache:/go/pkg/mod
+      - ruff_cache:/app/python_rag_worker/.ruff_cache
+      - mypy_cache:/app/python_rag_worker/.mypy_cache
+    entrypoint: ""
+    # 💡 1つのコンテナ内で、すべてのLinterを一気通貫で実行します
+    command: >
+      sh -c "
+      (echo '📐 Running go-arch-lint...' && go-arch-lint check) &
+      (cd python_rag_worker &&
+      echo '🧹 Running ruff format check...' && ruff format --check app) &
+      (cd python_rag_worker &&
+      echo '🐍 Running ruff check...' && ruff check app) &
+      (cd python_rag_worker &&
+      echo '🏷️ Running mypy...' && mypy --explicit-package-bases --config-file pyproject.toml app) &
+      wait
+      "
     profiles: ["tools"]
 
 volumes:
   postgres_data: # DBの中身を消さないためのボリューム
+  # 💡 静的解析用のキャッシュボリューム
+  go_build_cache:
+  go_mod_cache:
+  ruff_cache:
+  mypy_cache:
   

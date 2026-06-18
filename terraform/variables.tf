@@ -16,3 +16,9 @@ variable "db_password" {
   type        = string
   sensitive   = true # コンソール出力時にマスクされます
 }
+
+variable "pubsub_topic_id" {
+  type        = string
+  description = "GCP Pub/Sub Topic ID for file ingestion events"
+  default     = "file-ingest-topic"
+}

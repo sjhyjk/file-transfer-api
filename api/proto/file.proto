@@ -3,7 +3,7 @@ syntax = "proto3";
 package file;
 option go_package = "file-transfer-api/internal/handler/grpc/pb;filepb";
 
-import "google/protobuf/timestamp.proto"; // 🚀 タイムスタンプ用に追加
+import "google/protobuf/timestamp.proto"; // タイムスタンプ用
 
 service FileService {
   // Client-side Streaming: チャンクを連続して送り、最後にレスポンスを1つ返す
@@ -23,20 +23,30 @@ message UploadFileRequest {
 message FileMetadata {
   string id = 1;           // 🚀 UUID を受け取るために追加
   string filename = 2;
-  string tenant_id = 3;    // 🚀 RESTと統一
+  string tenant_id = 3;    // 🚀 HTTPと統一
   repeated string tags = 4;
   string status = 5;
   int64 expected_size = 6; // 🚀 事前バリデーション用
 }
 
+// 🚀 ステータスを enum として定義（proto3のルール上、0番目は未指定を表すのが一般的）
+enum TransferStatus {
+  TRANSFER_STATUS_UNSPECIFIED = 0;
+  TRANSFER_STATUS_PENDING     = 1;
+  TRANSFER_STATUS_PROCESSING  = 2;
+  TRANSFER_STATUS_COMPLETED   = 3;
+  TRANSFER_STATUS_FAILED      = 4;
+}
+
 // 🚀 Pub/Sub のメッセージの「正」となる、RAG 投入イベント定義
 message FileIngestEvent {
-  string file_id = 1;
+  int64 file_id = 1;
   string file_name = 2;
   string tenant_id = 3;
   repeated string tags = 4;
   string source = 5;
   google.protobuf.Timestamp created_at = 6;
+  TransferStatus status = 7;
 }
 
 message FileIngestResponse {

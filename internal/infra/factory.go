@@ -61,7 +61,7 @@ func NewStorageRepository(ctx context.Context, cfg *config.Config) (domain.FileR
 
 	slog.InfoContext(ctx, "✅ Storage repository initialized", "type", storageType)
 
-	// 🚀 修正：現状は Close が不要でも、将来のために空の cleanup を返す
+	// 🚀 現状は Close が不要でも、将来のために空の cleanup を返す
 	cleanup := func() {
 		slog.Info("Closing storage repository")
 	}
@@ -109,28 +109,53 @@ func NewMetadataRepository(ctx context.Context, fs embed.FS, cfg *config.Config)
 	return repo, cleanup, nil
 }
 
-func NewDataPipeline(ctx context.Context, cfg *config.Config) (domain.DataPipeline, error) {
+func NewDataPipeline(ctx context.Context, cfg *config.Config) (domain.DataPipeline, func(), error) {
 	slog.InfoContext(ctx, "Initializing Data Pipeline", "type", cfg.PipelineType)
 
 	switch cfg.PipelineType {
 	case "GCP":
 		// 🚀 次の「Pub/Subコミット」でここにGCP用の箱やエミュレータ実装を繋ぐ
-		return nil, fmt.Errorf("GCP Pub/Sub pipeline is not implemented yet")
+		pubsubPipeline, err := pipeline.NewPubSubPipeline(ctx, cfg.GCPProjectID, cfg.PubSubTopicID)
+		if err != nil {
+			return nil, func() {}, fmt.Errorf("failed to init pubsub pipeline: %w", err)
+		}
+
+		// 💡 main.goのdeferで呼ばれる引数なしのcleanup関数を生成。内部でClose(ctx)を呼ぶ
+		cleanup := func() {
+			// クリーンアップ実行時のContext（通常はBackground等）で安全に閉じる
+			if err := pubsubPipeline.Close(context.Background()); err != nil {
+				slog.Error("failed to close Pub/Sub pipeline gracefully", "error", err)
+			}
+		}
+
+		return pubsubPipeline, cleanup, nil
 
 	case "REDIS":
 		// 🚀 最後の「Redisコミット」でここにRedisキュー実装を繋ぐ
-		return nil, fmt.Errorf("redis pipeline is not implemented yet")
+		return nil, func() {}, fmt.Errorf("redis pipeline is not implemented yet")
 
 	case "GRPC":
 		// Python側のgRPCサーバーの宛先（例: localhost:50051）をconfigから渡してクライアントを初期化
 		slog.InfoContext(ctx, "Using gRPC Client Pipeline", "target", cfg.PythonGRPCTarget)
-		return pipeline.NewGrpcPythonPipeline(cfg.PythonGRPCTarget), nil
+		// 💡 2つの戻り値を正しく変数で受ける
+		grpcPipeline, err := pipeline.NewGrpcPythonPipeline(cfg.PythonGRPCTarget)
+		if err != nil {
+			return nil, func() {}, fmt.Errorf("failed to init gRPC pipeline: %w", err)
+		}
+
+		// 💡 main.goのdeferで呼ばれるクリーンアップ関数を生成
+		cleanup := func() {
+			if err := grpcPipeline.Close(context.Background()); err != nil {
+				slog.Error("failed to close gRPC pipeline gracefully", "error", err)
+			}
+		}
+		return grpcPipeline, cleanup, nil
 
 	case "HTTP":
 		fallthrough
 	default:
 		// 現在のHTTP通知（暫定）を返す
 		slog.InfoContext(ctx, "Using HTTP Python RAG Pipeline", "url", cfg.PythonRAGURL)
-		return pipeline.NewPythonPipeline(cfg.PythonRAGURL), nil
+		return pipeline.NewHttpPythonPipeline(cfg.PythonRAGURL), func() {}, nil
 	}
 }

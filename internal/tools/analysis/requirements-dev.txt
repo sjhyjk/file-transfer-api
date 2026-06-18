@@ -1,0 +1,7 @@
+# 🔍 静的解析・Linterツール本体（必要に応じて ==バージョン で固定してください）
+ruff
+mypy
+
+# 🏷️ gRPC / Protocol Buffers 用の型スタブ（これがないと pb 周りで mypy が怒ります）
+types-protobuf
+types-grpcio

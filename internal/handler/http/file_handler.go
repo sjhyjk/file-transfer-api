@@ -1,6 +1,6 @@
-// internal/handler/rest/file_handler_http.go
+// internal/handler/http/file_handler.go
 
-package rest
+package http
 
 import (
 	"file-transfer-api/internal/domain"
@@ -124,7 +124,7 @@ func (h *HTTPFileHandler) UploadFile(ctx echo.Context) error {
 		return ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to open file"})
 	}
 
-	// 🚀 修正：defer で Close のエラーを適切にハンドルする
+	// 🚀 defer で Close のエラーを適切にハンドルする
 	defer func() {
 		if closeErr := src.Close(); closeErr != nil {
 			slog.WarnContext(rCtx, "Failed to close uploaded file", "error", closeErr)

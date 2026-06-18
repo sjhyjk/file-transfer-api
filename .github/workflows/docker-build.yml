@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest # GitHub側のマシンで実行されるので、自分のPCは重くならない
+    runs-on: ubuntu-latest
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -16,6 +16,9 @@ jobs:
     # ✅ v4 から v6 に更新 (Node.js 24 対応)
     - name: Checkout code
       uses: actions/checkout@v6
+      with:
+        # 💡 git diff を正確に取るため、すべての履歴を取得（浅いクローンを避ける）
+        fetch-depth: 0
       env:
         # 「デフォルトブランチ名は main です」と、実行の瞬間に Git に直接叩き込む
         GIT_CONFIG_PARAMETERS: "'init.defaultBranch=main'"
@@ -28,7 +31,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: '1.25' # 1.24 から 1.25 へ。これでツールチェーンの自動DLをスキップできます
+        go-version: '1.25'
         cache: true        # 依存関係のキャッシュを有効化して、さらに高速化
 
     # 🔥 コード生成前の「真っ新な状態」で開発者の更新漏れをチェック
@@ -44,20 +47,14 @@ jobs:
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-    # 💡 Go と Python 両方の gRPC 生成プラグインをインストールする
-    - name: Install Protoc Plugins & Python Tools
+    # 💡 Go の gRPC 生成プラグインをインストールする
+    - name: Install Protoc Plugins
       run: |
         # Go 用プラグインのインストール
         go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
         go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
         # インストールしたバイナリのある場所にパスを通す
         echo "$HOME/go/bin" >> $GITHUB_PATH
-
-        # 🐍 Python 用ツール・ライブラリのインフラを一括集約インストール
-        # grpcio-tools: コード生成用
-        # mypy-protobuf: proto から .pyi (型定義) を生成するプラグイン
-        # ruff / mypy: 静的解析・型チェック用
-        python3 -m pip install grpcio-tools mypy-protobuf ruff mypy
 
     # 💡 GitHub上の空フォルダ(pb)に、その場でgRPCコードを復元・自動生成する
     - name: Generate gRPC Codes
@@ -72,7 +69,6 @@ jobs:
     # Phase 1: Quality Gate (Push & Manual)
     # 常に実行され、コードの健全性を担保するセーフティ工程
     # ==========================================
-
     # ✅ ステップ1: Go 基本品質チェック（静的解析・コンパイル）
     # 依存関係、コードの整合性、潜在的なバグをまとめて検証します。
     # go.mod / go.sum の更新漏れを検知し、ビルドの再現性を守ります。
@@ -83,9 +79,15 @@ jobs:
         # コンパイルは通るが潜在的なバグの原因になりそうなコードを検知します。
         go vet ./...
         # 全パッケージが正しくビルド可能か、Dockerビルド前に検証します
-        go build -v ./... # 全パッケージのコンパイルチェック（バイナリは作成せず検証のみ）
+        go build -v ./...
+    
+    # 🔐 1. セキュリティ：ソースコードにパスワードなどの流出がないか
+    - name: Check for Git Secrets
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # ✅ ステップ2: 高度な静的解析 (Linter)
+    # 🐹 ステップ2: Go 静的解析 (Linter)
     # go vet よりも遥かに厳しいチェック（未使用変数、複雑度、スペルミス等）を行い、
     # チーム開発における「読みやすさ」を機械的に担保します。
     - name: golangci-lint
@@ -93,14 +95,14 @@ jobs:
       with:
         version: latest
     
-    # 🐍 ステップ2.5: Python 静的解析 & 型チェック
-    # すでに上のステップで pip install grpcio-tools や ruff, mypy が入る状態を作ります
-    - name: Python Quality Check (Ruff & Mypy)
+    # 🐍📐 3. 自作コンテナ：Python(Ruff/Mypy) と Go-Arch-Lint を一括処理
+    # ※ docker-compose.yml 側の command を「go-arch-lint check && ruff ... && mypy ...」に調整しておきます
+    - name: Run Custom Linters (go-arch-lint & Python Quality Check)
       run: |
-        # 動的切り替え対応の Makefile タスクを呼び出す
-        make lint-python
+        docker compose --profile tools build static-analysis
+        docker compose --profile tools run --rm static-analysis
 
-    # ✅ ステップ3: ユニットテスト（モック環境）の実行
+    # 🧪 4. テスト＆品質可視化
     # これが失敗すると、下のビルドやデプロイは実行されません（安全！）
     # env を追加し、テストが「モックモード」で動くことを明示します。
     - name: Run Tests
@@ -111,25 +113,13 @@ jobs:
         DATABASE_URL: postgres://dummy:dummy@localhost:5432/dummy
       run: go test -v ./...
 
-    # ✅ ステップ4: アーキテクチャの静的解析
-    # 設計原則（DIP等）がコードレベルで守られているかを強制します。
-    - name: Architecture Check
-      run: |
-        go install github.com/fe3dback/go-arch-lint@latest
-        go-arch-lint check
-
     # --- ここから「手動実行（workflow_dispatch）」時のみ走るステップ ---
 
     # ==========================================
-    # Phase 2: Cloud Deployment (Manual Only)
+    # Phase 2: Docker Build & Security Scan (デプロイ時のみ実行)
     # workflow_dispatch 時のみ実行される
     # ==========================================
-    
     # ✅ ステップ5: Google Cloud 認証
-    # Keyless（Workload Identity）移行を見据えた構成でセキュアに認証します。
-    # 認証情報を更新すれば、即座にフルオートメーションが再開可能な状態で維持しています。
-    # Workload Identity 等の設定が済むまでは、サービスアカウントキー（JSON）を
-    # GitHub Secrets (GCP_SA_KEY) に登録して使う方式が一般的です。
     - name: Google Auth
       if: github.event_name == 'workflow_dispatch'
       uses: 'google-github-actions/auth@v2'
@@ -141,24 +131,62 @@ jobs:
         service_account: 'file-transfer-app-runtime@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
 
     # ✅ ステップ6: クラウド環境・Docker 認証
-    - name: 'Set up Cloud SDK'
+    - name: Set up Cloud SDK
       if: github.event_name == 'workflow_dispatch'
       uses: 'google-github-actions/setup-gcloud@v2'
 
-    - name: 'Docker Auth'
+    - name: Docker Auth
       if: github.event_name == 'workflow_dispatch'
       run: |-
         gcloud auth configure-docker us-west1-docker.pkg.dev
 
-    # ✅ ステップ7: Dockerビルド & プッシュ
+    # ✅ ステップ7: Go アプリの Dockerビルド & プッシュ
     # Secretを参照するため手動実行に限定。SHAタグでトレーサビリティを確保します。
-    - name: Build and Push Docker image
+    - name: Build Docker image
       if: github.event_name == 'workflow_dispatch'
       run: |
-        docker build -t us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }} .
-        docker push us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}
+        docker build -t file-transfer-api:${{ github.sha }} .
+        docker build -t python-rag-worker:${{ github.sha }} ./python_rag_worker
+    
+    # コンテナセキュリティスキャン (Trivy)
+    # 本番環境へデプロイされる直前の成果物に、深刻な脆弱性(CRITICAL)が混入していないかダブルチェック
+    - name: Run Trivy Vulnerability Scanner (Go API)
+      if: github.event_name == 'workflow_dispatch'
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'file-transfer-api:${{ github.sha }}'
+        format: 'table'
+        exit-code: '1' # 💡 深刻な脆弱性検出時、パイプラインをここで即座に遮断する
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
 
-    # ✅ ステップ8: Cloud Run へのデプロイ
+    - name: Run Trivy Vulnerability Scanner (Python Worker)
+      if: github.event_name == 'workflow_dispatch'
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'python-rag-worker:${{ github.sha }}'
+        format: 'table'
+        exit-code: '1'
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
+    
+    # ✅ ステップ7.5 :Docker プッシュ
+    - name: Push Docker image
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        docker tag file-transfer-api:${{ github.sha }} us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}
+        docker tag python-rag-worker:${{ github.sha }} us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/python-rag-worker:${{ github.sha }}
+        
+        docker push us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/file-transfer-api:${{ github.sha }}
+        # Python側のディレクトリを指定してビルド。Dockerfileはマルチステージ等で構成されている前提
+        docker push us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/python-rag-worker:${{ github.sha }}
+
+    # ==========================================
+    # Phase 3: Cloud Deployment (Manual Only)
+    # ==========================================
+    # ✅ ステップ8: Go アプリの Cloud Run へのデプロイ
     # 適切な環境変数とDB接続を構成し、最終的なリリースを実行します。
     - name: Deploy to Cloud Run
       if: github.event_name == 'workflow_dispatch'
@@ -171,9 +199,29 @@ jobs:
         flags: |
           --allow-unauthenticated
           --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
-        # ★ ここを追加！
         env_vars: |
           STORAGE_TYPE=gcs
           GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
           BUCKET_NAME=file-transfer-bucket-syou-20240121
           DATABASE_URL=postgres://app_user:${{ secrets.DB_PASSWORD }}@/transfer_metadata?host=%2Fcloudsql%2F${{ secrets.GCP_PROJECT_ID }}:us-west1:file-transfer-db
+    
+    # ✅ ステップ8.5: Python RAG Worker (Pub/Sub) を Cloud Run (サイドカー/常時稼働) にデプロイ
+    # 💡 ポイント：イベント駆動ワーカーのため ingress=none (外部アクセス遮断) にし、
+    # 　　CPUを常に割り当てることで、Pub/Subのイベントを即座に拾えるようにします。
+    - name: Deploy Python Worker to Cloud Run
+      if: github.event_name == 'workflow_dispatch'
+      uses: 'google-github-actions/deploy-cloudrun@v2'
+      with:
+        service: 'python-rag-worker'
+        image: 'us-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-repo/python-rag-worker:${{ github.sha }}'
+        region: 'us-west1'
+        flags: |
+          --no-allow-unauthenticated
+          --ingress=none
+          --no-cpu-throttling
+          --min-instances=1
+        # インフラから参照する環境変数をここで綺麗に注入
+        env_vars: |
+          GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+          PUBSUB_SUBSCRIPTION_ID=file-ingest-sub
+          STORAGE_ROOT=/storage

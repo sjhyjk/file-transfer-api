@@ -1,15 +1,13 @@
-// internal/handler/rest/router.go
+// internal/handler/http/router.go
 
-package rest
+package http
 
 import (
 	"file-transfer-api/internal/domain"
 	"file-transfer-api/internal/handler"
-	"file-transfer-api/internal/handler/rest/appmiddleware"
+	"file-transfer-api/internal/handler/appmiddleware"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"os"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -50,23 +48,4 @@ func NewRouter(interactor domain.FileUseCase, metadataRepo domain.MetadataReposi
 	})
 
 	return e
-}
-
-// StartServer はポートの取得から HTTP サーバーの起動までを担当します
-func StartServer(interactor domain.FileUseCase, metadataRepo domain.MetadataRepository) {
-	e := NewRouter(interactor, metadataRepo)
-
-	// ポート取得ロジックをここに隠蔽
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080" // ローカル実行時のデフォルト
-	}
-
-	slog.Info("📡 Starting HTTP server", "port", port)
-
-	// 🚀 Echo スタイルの起動
-	if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
-		slog.Error("❌ HTTP server failed to start", "error", err)
-		os.Exit(1)
-	}
 }

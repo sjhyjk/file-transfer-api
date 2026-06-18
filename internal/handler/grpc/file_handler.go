@@ -1,4 +1,4 @@
-// internal/handler/grpc/file_handler_grpc.go
+// internal/handler/grpc/file_handler.go
 
 package grpc
 

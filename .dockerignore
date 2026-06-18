@@ -5,3 +5,6 @@ storage/
 terraform/
 .env
 *.exe
+.mypy_cache
+.ruff_cache
+**/__pycache__
