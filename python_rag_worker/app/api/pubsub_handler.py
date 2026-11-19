@@ -24,14 +24,14 @@ class PubSubHandler:
 
     async def process_message(
         self, message: Any, subscriber_client: Any, subscription_path: str, ack_id: str
-    ) -> None:
+    ) -> bool:
         """ServerManager からメッセージパケットを引き受けるエントリーポイント"""
         # 1. トレースIDの抽出
         attributes = message.attributes if message.attributes else {}
         raw_trace_id = attributes.get("x-trace-id")
         trace_id = extract_trace_id(raw_trace_id)
 
-        # 2. 💡 このリクエスト専用のアダプターロガーを生成！
+        # 2. ロガーを生成
         req_logger = AppLoggerAdapter(
             self._base_logger, component="Pub/Sub Ingest", trace_id=trace_id
         )
@@ -39,19 +39,8 @@ class PubSubHandler:
         # 3. 実際の処理メソッドへ、このロガーを託して処理を移譲する
         success = await self.handle_message_core(message, req_logger)
 
-        # 4. 結果に応じた Ack / Nack 制御
-        if success:
-            await subscriber_client.acknowledge(
-                request={"subscription": subscription_path, "ack_ids": [ack_id]}
-            )
-        else:
-            await subscriber_client.modify_ack_deadline(
-                request={
-                    "subscription": subscription_path,
-                    "ack_ids": [ack_id],
-                    "ack_deadline_seconds": 0,
-                }
-            )
+        # 4. Ack / Nack の直接操作は廃止し、結果の成否のみをサーバー側に返す
+        return success
 
     async def handle_message_core(
         self, message: pubsub_v1.types.PubsubMessage, req_logger: AppLoggerAdapter

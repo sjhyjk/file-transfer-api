@@ -25,7 +25,7 @@ class PubSubMessageProcessor(Protocol):
         subscriber_client: SubscriberAsyncClient,
         subscription_path: str,
         ack_id: str,
-    ) -> None:
+    ) -> bool:
         """この型シグネチャをハンドラー側が実装していれば、どんな具象クラスでも受け付ける"""
         ...
 
@@ -59,8 +59,6 @@ class PubSubServerManager:
         """Pub/Subの非同期ループをバックグラウンドタスクとして起動"""
         try:
             self._stop_event.clear()
-            # メインループを asyncio.Task としてスケジュール
-            self._main_task = asyncio.create_task(self._subscribe_loop())
 
             self.logger.info(f"📡 Ready to subscribe to: {self.subscription_path}")
 
@@ -101,6 +99,7 @@ class PubSubServerManager:
 
             # 💡 リソースの存在を確認後、メインループを asyncio.Task としてスケジュール
             if is_ready:
+                # メインループを asyncio.Task としてスケジュール
                 self._main_task = asyncio.create_task(self._subscribe_loop())
                 self.logger.info(f"📡 Ready to subscribe to: {self.subscription_path}")
 
@@ -160,8 +159,11 @@ class PubSubServerManager:
 
     async def _safe_process(self, message: Any, ack_id: str) -> None:
         """個別メッセージの例外がメインループを壊さないためのラッパー"""
+        success = False
+
         try:
-            await self.processor.process_message(
+            # ハンドラーに処理を委譲し、成否（True/False）を受け取る
+            success = await self.processor.process_message(
                 message=message,
                 subscriber_client=self.subscriber,
                 subscription_path=self.subscription_path,
@@ -169,18 +171,33 @@ class PubSubServerManager:
             )
         except Exception as msg_err:
             self.logger.error(f"💥 Handler raised unhandled exception: {msg_err}")
+            success = False
 
         finally:
+            # 💡 サーバー側が唯一の責任者として Ack または Nack を安全に発行する
             try:
-                await self.subscriber.acknowledge(
-                    request=AcknowledgeRequest(
-                        subscription=self.subscription_path,
-                        ack_ids=[ack_id],
+                if success:
+                    await self.subscriber.acknowledge(
+                        request=AcknowledgeRequest(
+                            subscription=self.subscription_path,
+                            ack_ids=[ack_id],
+                        )
                     )
-                )
-                self.logger.debug(
-                    f"🧹 Message {message.message_id} acknowledged successfully."
-                )
+                    self.logger.debug(
+                        f"🧹 Message {message.message_id} acknowledged successfully."
+                    )
+                else:
+                    # 失敗時はデッドラインを0にして即時再送（Nack）させる
+                    await self.subscriber.modify_ack_deadline(
+                        request={
+                            "subscription": self.subscription_path,
+                            "ack_ids": [ack_id],
+                            "ack_deadline_seconds": 0,
+                        }
+                    )
+                    self.logger.warning(
+                        f"⚠️ Message {message.message_id} nacked (deadline set to 0)."
+                    )
             except Exception as ack_err:
                 self.logger.error(
                     f"🔥 Failed to send ACK for message {message.message_id}: {ack_err}"

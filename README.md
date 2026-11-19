@@ -9,7 +9,7 @@
 
 ---
 
-本プロジェクトの原点は、現職の金融基盤で直面した「**インフラ制約によるビジネス要件の断念**」という強い課題意識にあります。
+本プロジェクトの原点は、前職の金融基盤で直面した「**インフラ制約によるビジネス要件の断念**」という強い課題意識にあります。
 
 #### 🚩 直面した 3 つの構造的課題
 * **プラットフォーム依存による技術選定の硬直化**: 基盤側の都合でモダンな進化的アーキテクチャが阻害される現状。
@@ -19,6 +19,111 @@
 * **脆弱なセキュリティ境界**: 共有ストレージにおける「他テナントのパス推測可能性」という構造的欠陥。
 
 これらを「反面教師」とし、**エンタープライズ基準の厳格な制約下**でも進化可能なポータビリティと、開発者がロジックに集中できる**開発者体験(DevEx)**の両立を、アーキテクチャの力で証明することを目的としています。
+
+## 🛠️ 前提条件 (Prerequisites)
+ローカル環境で直接ビルドやテストを行う場合は、事前に以下のツールをインストールしてください。
+- **Go** (1.21以上) / **Python** (3.10以上) / **Make** / **Protobuf Compiler** (`protobuf-compiler`)
+- **Docker & Docker Compose** (コンテナ環境での完全検証や一括起動に推奨)
+- **WSL 2 (Ubuntu) 環境の場合**: 
+  ファイルI/Oのパフォーマンス維持およびトラブル防止のため、プロジェクトは必ずWindows側（`/mnt/c`）ではなく **WSL側のホームディレクトリ（`~/`）** 配下にクローンしてください。
+
+## 💻 技術スタック (Tech Stack)
+
+| カテゴリ | 使用技術・ツール |
+|:--- |:--- |
+| **Language** | Go (1.25), Python (3.14) |
+| **Framework / Protocol** | Echo (REST), FastAPI (Web/Webhook), gRPC (Protobuf), OpenAPI 3.0 |
+| **Database & Storage** | PostgreSQL (Cloud SQL), Google Cloud Storage (GCS) |
+| **Infrastructure & DevOps** | Docker / Docker Compose, Cloud Run, Terraform, GitHub Actions, Trivy |
+
+## 🛠 Quick Start (Local Development)
+
+外部インフラ（GCP）に依存せず、`Makefile` と`Docker Compose` を用いて「API + DB + 擬似ストレージ」の全環境を即座にローカルで再現可能です。
+
+### 1. 初回環境構築 & ツールセットアップ (First-time Setup)
+ローカルのネイティブ環境で開発や静的解析を行うために、Pythonの仮想環境（venv）および依存解析ツールをセットアップします。
+
+```bash
+# 依存ライブラリの同期（go.mod）
+make tidy
+
+# Python 仮想環境の自動構築 & 開発用パッケージのインストール
+make python-env
+
+# （オプション）ローカルに直接 Linter を導入する場合
+make install-lint-tools
+```
+
+### 2. スキーマからのコード自動生成 (Code Generation)
+OpenAPI および Protocol Buffers の定義から、Go/Python 両層の型安全なハンドラコードを自動生成します。
+
+```bash
+# OpenAPI (REST) から Go コードを生成
+make gen-api
+
+# Protocol Buffers から Go / Python (gRPC) のコードを生成
+make gen-proto
+```
+
+### 3. アプリケーションの起動 (Run Environment)
+開発スタイルに合わせて、以下のいずれかの方法で起動してください。
+
+```bash
+### 🐳 A. Docker Compose (推奨: フルコンテナ検証モード)
+# Pub/Subエミュレータの起動、トピック自動注入、Go/Python全コンテナのビルドとログ追跡を一発実行
+make dev
+
+### 💻 B. ハイブリッド・ネイティブ起動 (ローカルデバッグモード)
+# ポート競合を強制解放し、[Go ➡️ Python(gRPC)] の低遅延パイプラインで一括起動
+make run-local-all-grpc-clean
+
+# ポート競合を強制解放し、[Go ➡️ Python(HTTP)] の軽量Webhook連携モードで一括起動
+make run-local-all-http-clean
+```
+
+### 4. 動作確認 & 品質管理 (Verification & Linting)
+コードを変更した際は、以下のコマンドで Go / Python それぞれの厳格な Linter をローカルで実行できます。
+
+```bash
+# ── ① 動作確認（ヘルスチェック） ──
+curl http://localhost:8080/health
+
+# ── ② 商用グレードの静実解析・品質管理 ──
+# ローカルネイティブツール (Go / venv) で全解析を実行
+make lint
+
+# 【推奨】PC環境を汚さず、キャッシュの効いた Docker コンテナ経由で全解析を高速実行
+make lint-docker
+```
+
+### 5. テストとセキュリティスキャン (Testing & Security)
+実装したコードの正当性や、コンテナの脆弱性を網羅的に検証できます。
+
+```bash
+# Go と Python の全単体テストを一括実行
+make test
+
+# Trivy によるコンテナイメージおよびファイルシステムの脆弱性スキャン
+make trivy
+```
+
+### 6. APIの使い方（簡単なリクエスト例）
+コンテナ起動後、以下のコマンドで動作確認を行えます。
+
+```bash
+# ── ① 稼働確認（ヘルスチェック） ──
+curl http://localhost:8080/health
+
+# ── ② ファイルアップロードのテストリクエスト ──
+curl -X POST http://localhost:8080/upload \
+  -F "file=@./data/test.txt" \
+  -F "tenant_id=tenant-001"
+```
+
+```text
+> [!TIP]
+**DBリトライ戦略**: DBコンテナの起動遅延を許容する「指数バックオフによるリトライアルゴリズム」を実装済みです。`docker compose` 実行時、依存関係の順序を問わず、サービスは自動で正常な状態に収束します。
+```
 
 ## 🚀 実装の柱
 
@@ -31,6 +136,56 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
 - **Infrastructure & Elastic Persistence**: Factory Pattern により、ストレージ (GCS/Local/S3(予定)) やデータベース（Cloud SQL/In-Memory）を動的に切り替える **Plug-and-Play** な構成。今後予定している Redis による分散ロック（冪等性制御）や流量制限 も、既存ロジックに影響を与えずこのレイヤーのアダプター追加のみで対応可能。
 - **Ingest Pipeline (Event-Driven Integration)**: ファイルのライフサイクル変更を契機とする非同期通知基盤。DIP に基づく抽象化により、環境変数の切り替えのみで HTTP/gRPC による同期連携から GCP Pub/Sub を用いたイベント駆動型メッセージングモデルへと、シームレスに切り替え可能なアーキテクチャを構築。
 - **Observability & Lifecycle**: 独立した lifecycle マネージャーにより、OSシグナル（SIGTERM/SIGINT）に応じたGraceful Shutdownとリソース解放を一元管理。DI（依存注入）制御により、API/gRPC/CLI の実行形態を柔軟に選択可能。`slog` 拡張によりプロトコル境界（REST/gRPC）や並行処理を跨いだTrace IDのコンテキスト伝播を実現し、リクエスト単位の正確なログ追跡を確立。
+
+## 🏗 アーキテクチャと依存関係の制御
+```text
+
+【依存方向のフロー】
+🌐 External (API/CLI) ──┐
+                         ▼
+   ┌──────────────────────────────────────────┐
+   │  cmd/ (Main/DI Container)                │
+   └──────────┬───────────────────────────────┘
+              │ 1. Instantiate & Inject
+              ▼
+   ┌──────────────────────────────────────────┐
+   │  internal/usecase (Business Logic)       │
+   └──────────┬───────────────┬───────────────┘
+              │               │ 
+              │ (Interface)   │ (Interface)
+              ▼               ▼
+   ┌─────────────────┐ ┌──────────────────────┐
+   │ internal/domain │ │ internal/infra       │
+   │ (Entity/Models) │ │ (Adapters/GCS/SQL)   │
+   └─────────────────┘ └──────────────────────┘
+              ▲               │
+              └───────────────┘
+                2. Implements Domain Interfaces
+
+```
+
+## 🌐 データフロー戦略
+```text
+
+🌐 User/Client
+      │
+      ▼ [HTTPS/JSON] (GET /files?tags=...)
+┌──────────────────────────┐
+│  🚀 Google Cloud Run     │
+│  (Go API Container)      │
+│                          │
+│  ┌────────────────────┐  │
+│  │ ⚙️ Factory Pattern │  │
+│  │ 🔐 ADC Auth        │  │
+│  └────┬───────────┬───┘  │
+└───────┼───────────┼──────┘
+        │           │
+        ▼ [gRPC]    ▼ [SQL/Unix Socket]
+┌───────────────┐  ┌────────────────────┐
+│ 📦 GCS Bucket │  │ 🐘 Cloud SQL (PG)  │
+│ (File Binary) │  │ (File Metadata)    │
+└───────────────┘  └────────────────────┘
+```
 
 ## ⚡ Go の並行処理モデルの実測検証
 
@@ -183,86 +338,74 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
 ## 📁 プロジェクト構造
 ```text
 .
-├── api/                   # API 定義・スキーマ（情報のソースオブトゥルース）
-│   ├── proto/             # gRPC 定義
-│   │   └── file.proto     # gRPC/Protocol Buffers 用の定義
-│   ├── config.yaml        # サービス設定・環境定義
-│   └── openapi.yaml       # REST API (OpenAPI) 仕様書
-├── cmd/                   # Entry Point (実行環境の決定・DI・起動)
-│   ├── api/
-│   │   └── main.go        # 本番サーバー起動（DI、gRPC/REST並行起動）
-│   └── benchmark/
-│       └── main.go        # 性能比較検証用（Serial vs Parallel 計測）
-├── internal/              # Business Logic (クリーンアーキテクチャのコア)
-│   ├── domain/            # Entity & Repository Interface (DIPの起点)
-│   │   ├── file.go        # ファイルの実体（Entity）
-│   │   ├── repository.go  # 保存(Repo)と通知(Pipeline)の定義
-│   │   └── metadata.go    # RAG連携用の属性定義
-│   ├── usecase/           # Business Logic (並行処理・制御フロー)
+├── api/                     # API 定義・スキーマ（情報のソースオブトゥルース）
+│   ├── proto/file.proto     # gRPC/Protocol Buffers 用の定義
+│   ├── config.yaml          # サービス設定・環境定義
+│   └── openapi.yaml         # REST API (OpenAPI) 仕様書
+├── cmd/                     # Entry Point (実行環境の決定・DI・起動)
+│   ├── api/main.go          # 本番サーバー起動（DI、gRPC/REST並行起動）
+│   └── benchmark/main.go    # 性能比較検証用（Serial vs Parallel 計測）
+├── internal/                # Business Logic (クリーンアーキテクチャのコア)
+│   ├── domain/              # Entity & Repository Interface (DIPの起点)
+│   │   ├── file.go          # ファイルの実体（Entity）
+│   │   ├── metadata.go      # RAG連携用の属性定義
+│   │   └── repository.go    # 保存(Repo)と通知(Pipeline)の定義
+│   ├── usecase/             # Business Logic (並行処理・制御フロー)
 │   │   ├── file_interactor.go           # Goの並行アップロードのコアロジック
 │   │   └── file_interactor_test.go      # ロジックの正当性を保証するテスト
-│   ├── handler/           # 外部接続（HTTPリクエストの解析・レスポンス生成）
-│   │   ├── api.gen.go     # OpenAPIから自動生成されたボイラープレート
-│   │   ├── grpc/          # gRPC ハンドラー実装 & Reflection 制御
-│   │   │   ├── server.go                # gRPC サーバー起動・管理
-│   │   │   ├── file_handler.go     # gRPC ハンドラー本体
+│   ├── handler/             # 外部接続（HTTPリクエストの解析・レスポンス生成）
+│   │   ├── api.gen.go       # OpenAPIから自動生成されたボイラープレート
+│   │   ├── grpc/            # gRPC ハンドラー実装 & Reflection 制御
 │   │   │   ├── converter.go             # ドメインモデル と gRPC(Protobuf) の相互型変換ロジック
-│   │   │   └── pb/        # protoc生成ファイル (file_grpc.pb.go, file.pb.go)
-│   │   ├── http/          # Echo (REST) ハンドラー
-│   │   │   ├── file_handler.go
+│   │   │   ├── file_handler.go          # gRPC ストリーミング受信によるファイルアップロードの実装
+│   │   │   ├── server.go                # gRPC サーバーの起動・ヘルスチェック・ライフサイクル管理
+│   │   │   └── pb/                      # protoc生成ファイル
+│   │   ├── http/                        # Echo (REST) ハンドラー
+│   │   │   ├── file_handler.go          # OpenAPI仕様に基づくリクエスト解析・アップロード/一覧処理の実装
 │   │   │   ├── router.go                # ルーティング・ミドルウェア設定
-│   │   │   └── appmiddleware/           # アプリ固有のミドルウェア（Trace ID注入等）
-│   │   │       └── trace.go             # Trace ID注入等の共通前処理
-│   │   ├── pubsub/        # GCP Pub/Sub イベントのメッセージハンドラー
+│   │   │   └── server.go                # HTTPサーバーのライフサイクル管理（起動・Graceful Shutdown）
+│   │   ├── pubsub/                      # GCP Pub/Sub イベントのメッセージハンドラー
 │   │   │   └── publisher.go             # イベントパブリッシュの仲介
-│   │   └── appmiddleware/          # アプリ固有のミドルウェア（Trace ID注入等）
-│   │           └── trace.go             # Trace ID注入等の共通前処理
-│   ├── infra/             # Infrastructure Adapters (技術的詳細の実装)
-│   │   ├── factory.go     # インフラ切り替えの司令塔
-│   │   ├── pipeline/      # External Integration (RAG基盤等へのイベント通知)
+│   │   └── appmiddleware/trace.go       # HTTP/gRPC の Trace ID 注入などの共通ミドルウェア
+│   ├── infra/               # Infrastructure Adapters (技術的詳細の実装)
+│   │   ├── factory.go       # インフラ切り替えの司令塔
+│   │   ├── initializer.go   # 外部依存（DB/ストレージ/パイプライン）の一括初期化とクリーンアップ
+│   │   ├── pipeline/        # External Integration (RAG基盤等へのイベント通知)
 │   │   │   ├── grpc_notifier.go         # Python API への gRPC 通知実装
 │   │   │   ├── http_notifier.go         # Python API への HTTP 通知実装
 │   │   │   ├── pubsub_notifier.go       # Python API への Pub/Sub 通知実装
 │   │   │   └── json_dto.go              # 外部通知用メッセージ（JSON Data Transfer Object）の定義
-│   │   ├── gcs/           # GCS 具象実装（Workload Identity 対応） (STORAGE_TYPE=GCS)
-│   │   │   └── gcs_repository.go
-│   │   ├── local/         # ローカルファイルシステム実装 (STORAGE_TYPE=LOCAL)
-│   │   │   └── local_repository.go
-│   │   ├── sql/           # Cloud SQL (PostgreSQL) 永続化・マイグレーション
-│   │   │   ├── client.go                # DB接続プール（pgxpool）の管理とリトライロジック
-│   │   │   ├── postgres_repository.go   # Repository 構造体の定義と、共通処理・Closeなどのインフラ共通定義
-│   │   │   ├── metadata_ops.go          # FileMetadata（CRUD）に関するデータ操作ロジック
-│   │   │   └── migrations.go            # golang-migrate 実行ロジック
-│   │   └── inmemory/  # 高速な検証を可能にするインメモリDB実装
-│   │        └── memory_repository.go
-│   ├── lifecycle/         # アプリケーションの起動・終了・シグナル制御を一元管理
-│   │   └── lifecycle.go                 # Graceful Shutdown およびコンポーネントのライフサイクル制御
-│   ├── pkg/               # ユーティリティ・基盤共通パッケージ
-│   │   ├── config/        # 設定ロード (config.go)
-│   │   └── logger/        # 構造化ログ（slog）基盤。Trace IDの伝播を管理
-│   │       ├── context.go
-│   │       └── handler.go
-│   └── tools/             # 開発ツール・解析環境の管理
-│       ├── tools.go                     # Go製ツールのバージョン固定用ファイル
-│       └── analysis/                    # Go/Python 一気通貫の静的解析コンテナ環境
-│           ├── Dockerfile               # 静的解析専用の自作Dockerfile
-│           └── requirements-dev.txt
+│   │   ├── gcs/             # GCS 具象実装（Workload Identity 対応）
+│   │   ├── inmemory/        # 高速な検証を可能にするインメモリDB実装
+│   │   ├── local/           # ローカルファイルシステム実装
+│   │   └── sql/             # Cloud SQL (PostgreSQL) 永続化・マイグレーション
+│   │       ├── client.go                # DB接続プール（pgxpool）の管理とリトライロジック
+│   │       ├── metadata_ops.go          # FileMetadata（CRUD）に関するデータ操作ロジック
+│   │       ├── migrations.go            # golang-migrate 実行ロジック
+│   │       └── postgres_repository.go   # Repository 構造体の定義と、共通処理・Closeなどのインフラ共通定義
+│   ├── lifecycle/lifecycle.go           # Graceful Shutdownとシグナル制御によるアプリライフサイクル管理
+│   ├── pkg/                 # ユーティリティ・基盤共通パッケージ
+│   │   ├── config/          # 環境変数・設定ロード
+│   │   └── logger/          # Trace ID 伝播対応の slog 拡張基盤
+│   └── tools/               # 開発ツール・解析環境の管理
+│       ├── tools.go                     # Go製ツールのバージョン管理用ファイル
+│       └── analysis/                    # Go/Python 統合静的解析コンテナ環境
 │
-├── python_rag_worker/     # Python RAG 基盤
-│   ├── app/               # アプリケーションの構成とDIの起点
+├── python_rag_worker/                   # Python RAG 基盤
+│   ├── app/                             # アプリケーションの構成とDIの起点
 │   │   ├── main_http.py                 # HTTPワーカー専用エントリーポイント（FastAPI）
 │   │   ├── main_grpc.py                 # gRPCワーカー専用エントリーポイント（Async gRPC）
 │   │   ├── main_pubsub.py               # Pub/Subイベント駆動ワーカー専用エントリーポイント
-│   │   ├── api/           # ハンドラー層（外部リクエストの解釈とルーティング）
+│   │   ├── api/                         # ハンドラー層（外部リクエストの解釈とルーティング）
 │   │   │   ├── http_handler.py          # HTTPエンドポイント・ヘルスチェック
 │   │   │   ├── grpc_handler.py          # gRPCサービサーロジック
 │   │   │   ├── grpc_server.py           # gRPCサーバーの純粋なライフサイクル管理
 │   │   │   ├── pubsub_handler.py        # Pub/Sub
 │   │   │   └── pubsub_server.py         # Pub/Sub
-│   │   ├── pb/            # Python 用 gRPC 生成コード (file_pb2_grpc.py, file_pb2.py)
-│   │   ├── services/      # ユースケース・ドメイン層（パイプラインの定義）
+│   │   ├── pb/                          # Python 用 gRPC 生成コード
+│   │   ├── services/                    # ユースケース・ドメイン層（パイプラインの定義）
 │   │   │   └── rag_service.py           # オーケストレーションとRAG核心ロジック（HTTP/gRPC共通）
-│   │   ├── infra/         # インフラ層（外部ライブラリの実装詳細）
+│   │   ├── infra/                       # インフラ層（外部ライブラリの実装詳細）
 │   │   │   ├── extractors/              # 形式ごとの抽出器を格納
 │   │   │   │   ├── base.py              # 共通インターフェース
 │   │   │   │   ├── excel_extractor.py
@@ -272,145 +415,34 @@ OpenAPI 3.0 および **Protocol Buffers** を **SSOT** とし、Go/Python両層
 │   │   │   │   └── word_extractor.py 
 │   │   │   ├── extractor_factory.py     # 形式判定と振り分け
 │   │   │   └── chunker.py               # チャンク分割
-│   │   └── core/          # 共通基盤
+│   │   └── core/                        # 共通基盤
 │   │       ├── config.py                # 環境変数・設定管理
 │   │       ├── constants.py             # 
 │   │       └── logger.py                # ログの一元初期化
-│   ├── Dockerfile         # Python 実行環境のコンテナ定義
-│   ├── pyproject.toml     # Python ツールチェーン・静的解析設定
-│   └── requirements.txt   # Python 依存ライブラリ
+│   ├── Dockerfile           # Python 実行環境のコンテナ定義
+│   ├── pyproject.toml       # Python ツールチェーン・静的解析設定
+│   └── requirements.txt     # Python 依存ライブラリ
 │
-├── migrations/            # DB スキーマ管理 (SQLファイル)
-│   ├── 000001_create_file_metadata_table.up.sql
-│   ├── 000001_create_file_metadata_table.down.sql
-│   ├── 000002_add_gin_index_to_tags.up.sql
-│   └── 000002_add_gin_index_to_tags.down.sql
-├── terraform/             # Infrastructure as Code (GCPリソース定義)
-│   ├── main.tf            # GCSリソース・Provider定義
-│   ├── outputs.tf         # インフラ出力情報の定義
-│   └── variables.tf       # プロジェクトID・バケット名の変数管理
-├── .github/workflows/     # CI/CD パイプライン (GitHub Actions)
-│   └── docker-build.yml   # 自動コンテナビルド定義
-├── data/                  # テスト用データ（parallel-test-*.txt 等）
+├── .github/workflows/docker-build.yml   # GitHub Actions による CI/CD・自動コンテナビルド
+├── migrations/              # DB スキーマ管理 (SQLファイル)
+├── terraform/               # Infrastructure as Code (GCPリソース定義)
+├── data/                    # テスト用データ（parallel-test-*.txt 等）
 │
 # 💡 【Goコード・ビルド関連の塊】
-├── assets.go              # プロジェクト共通資産（SQL等）の embed 定義
-├── go.mod                 # 依存関係管理
+├── assets.go                # プロジェクト共通資産（SQL等）の embed 定義
+├── go.mod                   # 依存関係管理
 │
 # 💡 【環境・コンテナインフラ関連の塊】
-├── docker-compose.yml     # DB・API, Python Mockの疎結合な依存関係とネットワークを定義
-├── Dockerfile             # マルチステージビルドによる軽量実行イメージ定義
-├── .env                   # 環境設定（Git管理対象外）
+├── docker-compose.yml       # DB・API, Python Mockの疎結合な依存関係とネットワークを定義
+├── Dockerfile               # マルチステージビルドによる軽量実行イメージ定義
+├── .env                     # 環境設定（Git管理対象外）
 │
 # 💡 【Linter・CI/CD・タスク自動化関連の塊】
-├── .go-arch-lint.yml      # クリーンアーキテクチャの依存方向を強制する Lint 定義
-├── .golangci.yml          # 静的解析ルール定義
-├── Makefile               # 標準化された開発コマンド (Go/Python 両対応)
-├── README.md              # 本ドキュメント
+├── .go-arch-lint.yml        # クリーンアーキテクチャの依存方向を強制する Lint 定義
+├── .golangci.yml            # 静的解析ルール定義
+├── Makefile                 # 標準化された開発コマンド (Go/Python 両対応)
+├── README.md                # 本ドキュメント
 │
-├── python_comparison/     # [In Progress] Go (Parallel) vs Python (AsyncIO) のスループット・メモリ効率比較検証
-└── aws_infrastructure/    # [In Progress] マルチクラウド (S3) 展開用の設計検討
-```
-
-## 🌐 データフロー戦略
-```text
-
-🌐 User/Client
-      │
-      ▼ [HTTPS/JSON] (GET /files?tags=...)
-┌──────────────────────────┐
-│  🚀 Google Cloud Run     │
-│  (Go API Container)      │
-│                          │
-│  ┌────────────────────┐  │
-│  │ ⚙️ Factory Pattern │  │
-│  │ 🔐 ADC Auth        │  │
-│  └────┬───────────┬───┘  │
-└───────┼───────────┼──────┘
-        │           │
-        ▼ [gRPC]    ▼ [SQL/Unix Socket]
-┌───────────────┐  ┌────────────────────┐
-│ 📦 GCS Bucket │  │ 🐘 Cloud SQL (PG)  │
-│ (File Binary) │  │ (File Metadata)    │
-└───────────────┘  └────────────────────┘
-```
-
-## 🏗 アーキテクチャと依存関係の制御
-```text
-
-【依存方向のフロー】
-🌐 External (API/CLI) ──┐
-                         ▼
-   ┌──────────────────────────────────────────┐
-   │  cmd/ (Main/DI Container)                │
-   └──────────┬───────────────────────────────┘
-              │ 1. Instantiate & Inject
-              ▼
-   ┌──────────────────────────────────────────┐
-   │  internal/usecase (Business Logic)       │
-   └──────────┬───────────────┬───────────────┘
-              │               │ 
-              │ (Interface)   │ (Interface)
-              ▼               ▼
-   ┌─────────────────┐ ┌──────────────────────┐
-   │ internal/domain │ │ internal/infra       │
-   │ (Entity/Models) │ │ (Adapters/GCS/SQL)   │
-   └─────────────────┘ └──────────────────────┘
-              ▲               │
-              └───────────────┘
-                2. Implements Domain Interfaces
-
-```
-
-## 🛠 Quick Start (Local Development)
-
-外部インフラ（GCP）に依存せず、`Makefile` と`Docker Compose` を用いて「API + DB + 擬似ストレージ」の全環境を即座にローカルで再現可能です。
-
-### 1. 依存ツールのセットアップ & コード生成
-OpenAPI スキーマから型安全な Go コードを生成します。
-
-```bash
-# 依存ライブラリの同期
-make tidy
-
-# OpenAPI スキーマからハンドラ・型定義を自動生成
-make gen-api
-```
-
-### 2. 環境の起動
-開発スタイルに合わせて、以下のいずれかの方法で起動してください。
-
-```bash
-### 🐳 A. Docker Compose (Most Recommended / Deep Dev Mode)
-# Pub/Subエミュレータの起動、トピック自動注入、Go/Python全コンテナのビルドとログ追跡を一発で全自動実行します
-make dev
-
-### 💻 B. Go/Python ローカル同時ネイティブ起動 (Hybrid Debug Mode)
-# ポート競合を強制解放し、[Go ➡️ Python(gRPC)] の本命低遅延パイプラインで一括起動
-make run-local-all-grpc-clean
-
-# ポート競合を強制解放し、[Go ➡️ Python(HTTP)] の軽量Webhook連携モードで一括起動
-make run-local-all-http-clean
-```
-
-### 3. 動作確認（ヘルスチェック）
-```bash
-# システムの稼働状況と起動時パフォーマンス（Gain）を確認
-curl http://localhost:8080/health
-```
-
-### 4. 品質管理・静的解析の実行（商用グレードの検証）
-コードを変更した際は、以下のコマンドで Go / Python それぞれの厳格な Linter をローカルで実行できます。
-
-```bash
-# ローカルのネイティブツールで全解析（Go & Python venv）を実行
-make lint
-
-# 【推奨】PC環境を汚さず、キャッシュの効いたDockerコンテナ経由で全解析を高速実行
-make lint-docker
-```
-
-```text
-> [!TIP]
-**DBリトライ戦略**: DBコンテナの起動遅延を許容する「指数バックオフによるリトライアルゴリズム」を実装済みです。`docker compose` 実行時、依存関係の順序を問わず、サービスは自動で正常な状態に収束します。
+├── python_comparison/       # [In Progress] Go (Parallel) vs Python (AsyncIO) のスループット・メモリ効率比較検証
+└── aws_infrastructure/      # [In Progress] マルチクラウド (S3) 展開用の設計検討
 ```
