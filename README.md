@@ -31,7 +31,7 @@
 
 | カテゴリ | 使用技術・ツール |
 |:--- |:--- |
-| **Language** | Go (1.25), Python (3.14) |
+| **Language** | Go (1.26), Python (3.14) |
 | **Framework / Protocol** | Echo (REST), FastAPI (Web/Webhook), gRPC (Protobuf), OpenAPI 3.0 |
 | **Database & Storage** | PostgreSQL (Cloud SQL), Google Cloud Storage (GCS) |
 | **Infrastructure & DevOps** | Docker / Docker Compose, Cloud Run, Terraform, GitHub Actions, Trivy |

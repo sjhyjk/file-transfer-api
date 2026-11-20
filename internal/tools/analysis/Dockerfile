@@ -1,7 +1,7 @@
 # ==========================================
 # 1. ツールビルドステージ（Goのツールをビルド）
 # ==========================================
-FROM golang:1.25-alpine AS tools-builder
+FROM golang:1.26-alpine AS tools-builder
 RUN go install github.com/fe3dback/go-arch-lint@latest
 
 # ==========================================
