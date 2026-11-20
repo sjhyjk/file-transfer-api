@@ -97,14 +97,24 @@ gen-proto-python: ## Python 用の gRPC コードを生成
 	cp $(API_PROTO) ./python_rag_worker/app/pb/
 
 	# Python 用 (grpcio-tools が必要)
-	$(PY_RUN) PATH="$$(pwd)/venv/bin:$$PATH" \
-	./venv/bin/python3 -m grpc_tools.protoc \
-		--proto_path=app \
-		--python_out=app \
-		--grpc_python_out=app \
-		--mypy_out=app \
-		--mypy_grpc_out=app \
-		app/pb/$(notdir $(API_PROTO))
+	@if [ -x ./python_rag_worker/venv/bin/python3 ]; then \
+		$(PY_RUN) PATH="$$(pwd)/venv/bin:$$PATH" \
+		./venv/bin/python3 -m grpc_tools.protoc \
+			--proto_path=app \
+			--python_out=app \
+			--grpc_python_out=app \
+			--mypy_out=app \
+			--mypy_grpc_out=app \
+			app/pb/$(notdir $(API_PROTO)); \
+	else \
+		$(PY_RUN) python3 -m grpc_tools.protoc \
+			--proto_path=app \
+			--python_out=app \
+			--grpc_python_out=app \
+			--mypy_out=app \
+			--mypy_grpc_out=app \
+			app/pb/$(notdir $(API_PROTO)); \
+	fi
 	
 	# 🔥 生成が終わったら、二重管理にならないよう元の .proto コピーだけを綺麗に削除
 	rm ./python_rag_worker/app/pb/$(notdir $(API_PROTO))
